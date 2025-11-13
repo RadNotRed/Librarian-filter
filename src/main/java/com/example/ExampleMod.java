@@ -1,34 +1,33 @@
 package com.example;
 
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.LecternBlock;
-import net.minecraft.block.entity.SignBlockEntity;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.entity.ai.brain.MemoryModuleType;
-import net.minecraft.entity.passive.VillagerEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.GlobalPos;
-import net.minecraft.village.TradeOffer;
-import net.minecraft.village.VillagerProfession;
-import net.minecraft.world.World;
+import net.minecraft.core.*;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.VillagerData;
+import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LecternBlock;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.phys.AABB;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.minecraft.core.component.DataComponents;
+
 
 import java.util.*;
 
@@ -39,7 +38,6 @@ public class ExampleMod implements ModInitializer {
     private static final HashMap<UUID, Long> cooldownMap = new HashMap<>();
     private static final long COOLDOWN_TIME = 1000; // in milliseconds
     private static final int VILLAGER_SEARCH_RADIUS = 128; //in blocks
-    private static final String enchantmentRegex = "minecraft:enchantment / minecraft:";
 
 
     @Override
@@ -54,24 +52,24 @@ public class ExampleMod implements ModInitializer {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             BlockPos clickedPos = hitResult.getBlockPos();
             Block blockClicked = world.getBlockState(clickedPos).getBlock();
-            Text[] signTexts = getSignTexts(world, blockClicked, clickedPos);
+            List<String> signTexts = getSignTexts(world, blockClicked, clickedPos);
             List<EnchFilter> filters = getEnchFilters(signTexts);
             if (!filters.isEmpty()) {
-                ActionResult result = getVillagerForLectern(player, world, clickedPos, filters);
+                InteractionResult result = getVillagerForLectern(player, world, clickedPos, filters);
                 if (result != null) {
                     return result;
                 }
             }
-            return ActionResult.PASS; // Continue normal behavior for other blocks
+            return InteractionResult.PASS; // Continue normal behavior for other blocks
         });
     }
 
-    private List<EnchFilter> getEnchFilters(Text[] signTexts) {
+    private List<EnchFilter> getEnchFilters(List<String> signTexts) {
         List<EnchFilter> filters = new ArrayList<>();
         if (signTexts != null) {
-            for (Text line : signTexts) {
-                if (line.getString() != null) {
-                    String[] filterText = line.getString().trim().split(" ");
+            for (String line : signTexts) {
+                if (line != null && !line.isEmpty()) {
+                    String[] filterText = line.trim().split(" ");
                     if (filterText.length > 1) {
                         if (StringUtils.isNumeric(filterText[1])) {
                             int enchLevel = Integer.parseInt(filterText[1]);
@@ -79,45 +77,48 @@ public class ExampleMod implements ModInitializer {
                                 filters.add(new EnchFilter(filterText[0], enchLevel));
                             }
                         }
+                    } else {
+                        filters.add(new EnchFilter(filterText[0], 0));
                     }
                 }
             }
         }
+
         return filters;
     }
 
-    private Text[] getSignTexts(World world, Block blockClicked, BlockPos clickedPos) {
+    private List<String> getSignTexts(Level world, Block blockClicked, BlockPos clickedPos) {
 
         // Check if the block clicked is a lectern
         if (blockClicked == Blocks.LECTERN) {
             // Get the lectern's facing direction
-            Direction facingDirection = world.getBlockState(clickedPos).get(LecternBlock.FACING);
+            Direction facingDirection = world.getBlockState(clickedPos).getValue(LecternBlock.FACING);
 
             // Get the position in front of the lectern (based on its facing direction)
-            BlockPos signPos = clickedPos.offset(facingDirection);
+            BlockPos signPos = clickedPos.relative(facingDirection);
             // Get the BlockEntity (SignBlockEntity) of the WallSign
             if (world.getBlockEntity(signPos) instanceof SignBlockEntity signEntity) {
                 // Retrieve the text written on the sign
-                return signEntity.getText(true).getMessages(false); // Get the text on the first line (index 0)
+                return Arrays.stream(signEntity.getFrontText().getMessages(false)).map(Component::getString).toList();
             }
 
         }
         return null;
     }
 
-    private ActionResult getVillagerForLectern(PlayerEntity player, World world, BlockPos clickedPos, List<EnchFilter> filters) {
-        List<VillagerEntity> nearbyEntities = world.getEntitiesByClass(VillagerEntity.class, player.getBoundingBox().expand(VILLAGER_SEARCH_RADIUS), (entity) -> true);
-        for (VillagerEntity villager : nearbyEntities) {
-            Registry<VillagerProfession> registry = world.getRegistryManager().getOrThrow(RegistryKeys.VILLAGER_PROFESSION);
-            RegistryEntry.Reference<VillagerProfession> librarian = registry.getOrThrow(VillagerProfession.LIBRARIAN);
-            // Check if the villager is a librarian
-            if (librarian.equals(villager.getVillagerData().profession())) {
-                Optional<GlobalPos> jobSitePosOptional = villager.getBrain().getOptionalMemory(MemoryModuleType.JOB_SITE);
+    private InteractionResult getVillagerForLectern(Player player, Level world, BlockPos clickedPos, List<EnchFilter> filters) {
+        AABB box = player.getBoundingBox().inflate(VILLAGER_SEARCH_RADIUS); // use inflate, not expandTowards
+
+        List<Villager> nearbyVillagers = world.getEntitiesOfClass(Villager.class, box, v -> true);
+        for (Villager villager : nearbyVillagers) {
+            // Check if the villager is a librarianProfession
+            if (villager.getVillagerData().profession().is(VillagerProfession.LIBRARIAN)) {
+                Optional<GlobalPos> jobSitePosOptional = villager.getBrain().getMemory(MemoryModuleType.JOB_SITE);
                 // Convert GlobalPos to BlockPos and compare with clicked lectern
-                if (jobSitePosOptional != null && jobSitePosOptional.isPresent()) {
+                if (jobSitePosOptional.isPresent()) {
                     BlockPos jobSitePos = jobSitePosOptional.get().pos(); // Extract BlockPos from GlobalPos
                     if (jobSitePos.equals(clickedPos)) {
-                        if (villager.getExperience() == 0) {
+                        if (villager.getVillagerXp() == 0) {
                             return filterTrade(player, world, villager, filters);
                         }
                     }
@@ -127,44 +128,68 @@ public class ExampleMod implements ModInitializer {
         return null;
     }
 
-    private ActionResult filterTrade(PlayerEntity player, World world, VillagerEntity villager, List<EnchFilter> filters) {
-        if (world instanceof ServerWorld) {
-            UUID playerUUID = player.getUuid();
+    private InteractionResult filterTrade(Player player, Level world, Villager villager, List<EnchFilter> filters) {
+        if (world instanceof ServerLevel) {
+            UUID playerUUID = player.getUUID();
             long currentTime = System.currentTimeMillis();
             // Check if the player is still on cooldown
             if (cooldownMap.containsKey(playerUUID)) {
                 long lastClickTime = cooldownMap.get(playerUUID);
                 long difference = currentTime - lastClickTime;
                 if (difference < COOLDOWN_TIME) {
-                    return ActionResult.FAIL; // Prevents further execution
+                    return InteractionResult.FAIL; // Prevents further execution
                 }
             }
-            if (villager != null) {
-                Registry<VillagerProfession> registry = world.getRegistryManager().getOrThrow(RegistryKeys.VILLAGER_PROFESSION);
-                RegistryEntry.Reference<VillagerProfession> villagerNone = registry.getOrThrow(VillagerProfession.NONE);
-                RegistryEntry.Reference<VillagerProfession> villagerLibrarian = registry.getOrThrow(VillagerProfession.LIBRARIAN);
+            if (villager != null && !world.isClientSide()) {
+                RegistryAccess access = villager.level().registryAccess();
                 int recycleCount = 0;
+
                 while (recycleCount <= 10000) {
+                    // --- Reset profession to NONE ---
+                    VillagerData data = villager.getVillagerData();
+                    Holder<VillagerProfession> noneProfession = access.getOrThrow(VillagerProfession.NONE);
+                    villager.setVillagerData(data.withProfession(noneProfession));
 
-                    villager.setVillagerData(villager.getVillagerData().withProfession(villagerNone));
-                    // Wait a tick to let Minecraft update (optional, if needed)
-                    villager.refreshPositionAndAngles(villager.getX(), villager.getY(), villager.getZ(), villager.getYaw(), villager.getPitch());
 
-                    // REASSIGN librarian profession (force trade refresh)
-                    villager.setVillagerData(villager.getVillagerData().withProfession(villagerLibrarian));
+                    // --- Reassign to LIBRARIAN ---
+                    Holder<VillagerProfession> librarianProfession = access.getOrThrow(VillagerProfession.LIBRARIAN);
+                    villager.setVillagerData(villager.getVillagerData().withProfession(librarianProfession));
                     recycleCount++;
-                    for (TradeOffer trade : villager.getOffers()) {
-                        ItemStack sellItem = trade.getSellItem();
+                    System.out.println("recycleCount " + recycleCount);
+
+                    // --- Check trades ---
+                    MerchantOffers offers = villager.getOffers();
+                    for (MerchantOffer trade : offers) {
+                        ItemStack sellItem = trade.getResult();
+
+                        // Only look at enchanted books
                         if (sellItem.getItem() == Items.ENCHANTED_BOOK) {
-                            // Get enchantments on the book
-                            for (Object2IntMap.Entry<RegistryEntry<Enchantment>> entry : EnchantmentHelper.getEnchantments(sellItem).getEnchantmentEntries()) {
-                                String string = entry.getKey().toString();
-                                String idAsString = string.split(enchantmentRegex)[1];
-                                int intValue = entry.getIntValue();
+                            ItemEnchantments enchantments = sellItem.getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
+
+                            for (var entry : enchantments.entrySet()) {
+                                Holder<Enchantment> enchHolder = entry.getKey();
+                                int enchBookLevel = entry.getIntValue();
+
+                                // Get the simple name (e.g., "efficiency")
+                                String enchName = enchHolder.unwrapKey()
+                                        .map(k -> k.location().getPath())
+                                        .orElse("unknown");
+
+                                System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel);
+
+                                // Compare with filters (partial match, exact enchBookLevel)
                                 for (EnchFilter filter : filters) {
-                                    if (idAsString.startsWith(filter.enchName.toLowerCase()) && intValue == filter.enchLevel) {
-                                        cooldownMap.put(playerUUID, currentTime);
-                                        return ActionResult.SUCCESS;
+                                    int expectedLevel = filter.enchLevel;
+                                    if (enchName.startsWith(filter.enchName.toLowerCase())) {
+                                        if (expectedLevel == 0) {
+                                            Enchantment enchantment = enchHolder.value();
+                                            expectedLevel = enchantment.getMaxLevel();
+                                        }
+                                        if (enchBookLevel == expectedLevel) {
+                                            cooldownMap.put(playerUUID, currentTime);
+                                            System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                                            return InteractionResult.SUCCESS;
+                                        }
                                     }
                                 }
                             }
@@ -173,7 +198,7 @@ public class ExampleMod implements ModInitializer {
                 }
             }
         }
-        return ActionResult.PASS;
+        return InteractionResult.PASS;
     }
 
     public record EnchFilter(String enchName, int enchLevel) {
