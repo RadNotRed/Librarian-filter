@@ -41,6 +41,7 @@ public class ExampleMod implements ModInitializer {
     private static final HashMap<UUID, Long> cooldownMap = new HashMap<>();
     private static final long COOLDOWN_TIME = 1000; // in milliseconds
     private static final int VILLAGER_SEARCH_RADIUS = 128; //in blocks
+    private static final int MAX_REROLL_COUNT = Integer.MAX_VALUE; //in blocks
 
 
     @Override
@@ -58,30 +59,33 @@ public class ExampleMod implements ModInitializer {
             List<String> signTexts = getSignTexts(world, blockClicked, clickedPos);
             List<EnchFilter> filters = getEnchFilters(signTexts);
             if (!filters.isEmpty()) {
-                FilterResult filterResult = getVillagerForLectern(player, world, clickedPos, filters);
-                if (filterResult == FilterResult.SUCCESS) {
-                    ((ServerLevel) world).sendParticles(
-                            ParticleTypes.HAPPY_VILLAGER,
-                            clickedPos.getX() + 0.5,
-                            clickedPos.getY() + 1,
-                            clickedPos.getZ() + 0.5,
-                            8, 0.3, 0.3, 0.3, 0.01
-                    );
-                    world.playSound(null, clickedPos,
-                            SoundEvents.VILLAGER_YES,
-                            SoundSource.NEUTRAL, 1f, 1f);
-                }
-                if (filterResult == FilterResult.FAILED) {
-                    ((ServerLevel) world).sendParticles(
-                            ParticleTypes.ANGRY_VILLAGER,
-                            clickedPos.getX() + 0.5,
-                            clickedPos.getY() + 1,
-                            clickedPos.getZ() + 0.5,
-                            8, 0.3, 0.3, 0.3, 0.01
-                    );
-                    world.playSound(null, clickedPos,
-                            SoundEvents.VILLAGER_NO,
-                            SoundSource.NEUTRAL, 1f, 1f);
+                Villager villager = getVillagerForLectern(player, world, clickedPos, filters);
+                if (villager != null) {
+                    FilterResult filterResult = filterTrade(player, world, villager, filters);
+                    if (filterResult == FilterResult.SUCCESS) {
+                        ((ServerLevel) world).sendParticles(
+                                ParticleTypes.HAPPY_VILLAGER,
+                                villager.getX() + 0.5,
+                                villager.getY() + 1,
+                                villager.getZ() + 0.5,
+                                8, 0.3, 0.3, 0.3, 0.01
+                        );
+                        world.playSound(null, villager,
+                                SoundEvents.VILLAGER_YES,
+                                SoundSource.NEUTRAL, 1f, 1f);
+                    }
+                    if (filterResult == FilterResult.FAILED) {
+                        ((ServerLevel) world).sendParticles(
+                                ParticleTypes.ANGRY_VILLAGER,
+                                villager.getX() + 0.5,
+                                villager.getY() + 1,
+                                villager.getZ() + 0.5,
+                                8, 0.3, 0.3, 0.3, 0.01
+                        );
+                        world.playSound(null, villager,
+                                SoundEvents.VILLAGER_NO,
+                                SoundSource.NEUTRAL, 1f, 1f);
+                    }
                 }
             }
             return InteractionResult.PASS; // Continue normal behavior for other blocks
@@ -135,7 +139,7 @@ public class ExampleMod implements ModInitializer {
         return null;
     }
 
-    private FilterResult getVillagerForLectern(Player player, Level world, BlockPos clickedPos, List<EnchFilter> filters) {
+    private Villager getVillagerForLectern(Player player, Level world, BlockPos clickedPos, List<EnchFilter> filters) {
         AABB box = player.getBoundingBox().inflate(VILLAGER_SEARCH_RADIUS); // use inflate, not expandTowards
 
         List<Villager> nearbyVillagers = world.getEntitiesOfClass(Villager.class, box, v -> true);
@@ -148,7 +152,7 @@ public class ExampleMod implements ModInitializer {
                     BlockPos jobSitePos = jobSitePosOptional.get().pos(); // Extract BlockPos from GlobalPos
                     if (jobSitePos.equals(clickedPos)) {
                         if (villager.getVillagerXp() == 0) {
-                            return filterTrade(player, world, villager, filters);
+                            return villager;
                         }
                     }
                 }
@@ -173,7 +177,7 @@ public class ExampleMod implements ModInitializer {
                 RegistryAccess access = villager.level().registryAccess();
                 int recycleCount = 0;
 
-                while (recycleCount <= 10000) {
+                while (recycleCount <= MAX_REROLL_COUNT -1) {
                     // --- Reset profession to NONE ---
                     VillagerData data = villager.getVillagerData();
                     Holder<VillagerProfession> noneProfession = access.getOrThrow(VillagerProfession.NONE);
