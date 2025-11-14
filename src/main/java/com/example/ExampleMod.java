@@ -3,6 +3,7 @@ package com.example;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.core.*;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -29,8 +30,6 @@ import net.minecraft.world.phys.AABB;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import net.minecraft.core.component.DataComponents;
-
 
 import java.util.*;
 
@@ -38,10 +37,11 @@ public class ExampleMod implements ModInitializer {
     public static final String MOD_ID = "elt";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    private static final HashMap<UUID, Long> cooldownMap = new HashMap<>();
+    private static final HashMap<UUID, Map<BlockPos, Long>> cooldownMap = new HashMap<>();
     private static final long COOLDOWN_TIME = 1000; // in milliseconds
     private static final int VILLAGER_SEARCH_RADIUS = 128; //in blocks
-    private static final int MAX_REROLL_COUNT = Integer.MAX_VALUE; //in blocks
+    private static final int MAX_REROLL_COUNT = 10000; //in blocks
+    private static final int durationTicks = 5; //in ticks
 
 
     @Override
@@ -55,6 +55,19 @@ public class ExampleMod implements ModInitializer {
         // Register the event to listen for right-click interactions
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             BlockPos clickedPos = hitResult.getBlockPos();
+            UUID playerUUID = player.getUUID();
+            long currentTime = System.currentTimeMillis();
+            // Check if the player is still on cooldown
+            if (cooldownMap.containsKey(playerUUID)) {
+                Long lastClickTime = cooldownMap.get(playerUUID).get(clickedPos);
+                if (lastClickTime != null) {
+                    long difference = currentTime - lastClickTime;
+                    if (difference < COOLDOWN_TIME) {
+                        return InteractionResult.PASS;  // Prevents further execution
+                    }
+                }
+
+            }
             Block blockClicked = world.getBlockState(clickedPos).getBlock();
             List<String> signTexts = getSignTexts(world, blockClicked, clickedPos);
             List<EnchFilter> filters = getEnchFilters(signTexts);
@@ -62,30 +75,8 @@ public class ExampleMod implements ModInitializer {
                 Villager villager = getVillagerForLectern(player, world, clickedPos, filters);
                 if (villager != null) {
                     FilterResult filterResult = filterTrade(player, world, villager, filters);
-                    if (filterResult == FilterResult.SUCCESS) {
-                        ((ServerLevel) world).sendParticles(
-                                ParticleTypes.HAPPY_VILLAGER,
-                                villager.getX() + 0.5,
-                                villager.getY() + 1,
-                                villager.getZ() + 0.5,
-                                8, 0.3, 0.3, 0.3, 0.01
-                        );
-                        world.playSound(null, villager,
-                                SoundEvents.VILLAGER_YES,
-                                SoundSource.NEUTRAL, 1f, 1f);
-                    }
-                    if (filterResult == FilterResult.FAILED) {
-                        ((ServerLevel) world).sendParticles(
-                                ParticleTypes.ANGRY_VILLAGER,
-                                villager.getX() + 0.5,
-                                villager.getY() + 1,
-                                villager.getZ() + 0.5,
-                                8, 0.3, 0.3, 0.3, 0.01
-                        );
-                        world.playSound(null, villager,
-                                SoundEvents.VILLAGER_NO,
-                                SoundSource.NEUTRAL, 1f, 1f);
-                    }
+                    spawnParticles(world, filterResult, villager, clickedPos);
+                    cooldownMap.put(playerUUID, Map.of(clickedPos, currentTime));
                 }
             }
             return InteractionResult.PASS; // Continue normal behavior for other blocks
@@ -166,18 +157,18 @@ public class ExampleMod implements ModInitializer {
             UUID playerUUID = player.getUUID();
             long currentTime = System.currentTimeMillis();
             // Check if the player is still on cooldown
-            if (cooldownMap.containsKey(playerUUID)) {
-                long lastClickTime = cooldownMap.get(playerUUID);
-                long difference = currentTime - lastClickTime;
-                if (difference < COOLDOWN_TIME) {
-                    return FilterResult.COOLDOWN; // Prevents further execution
-                }
-            }
+//            if (cooldownMap.containsKey(playerUUID)) {
+//                long lastClickTime = cooldownMap.get(playerUUID);
+//                long difference = currentTime - lastClickTime;
+//                if (difference < COOLDOWN_TIME) {
+//                    return FilterResult.COOLDOWN; // Prevents further execution
+//                }
+//            }
             if (villager != null && !world.isClientSide()) {
                 RegistryAccess access = villager.level().registryAccess();
                 int recycleCount = 0;
 
-                while (recycleCount <= MAX_REROLL_COUNT -1) {
+                while (recycleCount <= MAX_REROLL_COUNT - 1) {
                     // --- Reset profession to NONE ---
                     VillagerData data = villager.getVillagerData();
                     Holder<VillagerProfession> noneProfession = access.getOrThrow(VillagerProfession.NONE);
@@ -207,7 +198,7 @@ public class ExampleMod implements ModInitializer {
                                         .map(k -> k.location().getPath())
                                         .orElse("unknown");
 
-                                System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel);
+                                System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel + " price " + trade.getCostA().getCount());
 
                                 // Compare with filters (partial match, exact enchBookLevel)
                                 for (EnchFilter filter : filters) {
@@ -220,17 +211,13 @@ public class ExampleMod implements ModInitializer {
                                         if (enchBookLevel == expectedLevel) {
                                             if (filter.price > 0) {
                                                 if (trade.getCostA().getCount() <= filter.price) {
-                                                    cooldownMap.put(playerUUID, currentTime);
+
                                                     System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
                                                     return FilterResult.SUCCESS;
                                                 }
                                             } else {
-                                                Integer minPrice = getPriceMap().get(expectedLevel);
-                                                if (trade.getCostA().getCount() == minPrice) {
-                                                    cooldownMap.put(playerUUID, currentTime);
-                                                    System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
-                                                    return FilterResult.SUCCESS;
-                                                }
+                                                System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                                                return FilterResult.SUCCESS;
                                             }
                                         }
                                     }
@@ -262,5 +249,81 @@ public class ExampleMod implements ModInitializer {
         FAILED,
         COOLDOWN
     }
+
+
+    private void spawnParticles(Level world, FilterResult filterResult, Villager villager, BlockPos clickedPos) {
+        if (filterResult == FilterResult.SUCCESS) {
+            world.playSound(null, villager,
+                    SoundEvents.VILLAGER_YES,
+                    SoundSource.NEUTRAL, 1f, 1f);
+            for (int i = 0; i < durationTicks; i++) {
+                ((ServerLevel) world).sendParticles(
+                        ParticleTypes.HAPPY_VILLAGER,
+                        villager.getX() + 0.5,
+                        villager.getY() + 1,
+                        villager.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01
+                );
+                ((ServerLevel) world).sendParticles(
+                        ParticleTypes.HAPPY_VILLAGER,
+                        clickedPos.getX() + 0.5,
+                        clickedPos.getY() + 1,
+                        clickedPos.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01
+                );
+            }
+        }
+        if (filterResult == FilterResult.FAILED) {
+            world.playSound(null, villager,
+                    SoundEvents.VILLAGER_NO,
+                    SoundSource.NEUTRAL, 1f, 1f);
+            for (int i = 0; i < durationTicks; i++) {
+                ((ServerLevel) world).sendParticles(
+                        ParticleTypes.ANGRY_VILLAGER,
+                        villager.getX() + 0.5,
+                        villager.getY() + 1,
+                        villager.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01
+                );
+                ((ServerLevel) world).sendParticles(
+                        ParticleTypes.ANGRY_VILLAGER,
+                        clickedPos.getX() + 0.5,
+                        clickedPos.getY() + 1,
+                        clickedPos.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01
+                );
+            }
+
+        }
+    }
+
+    public static void spawnLineParticles(ServerLevel world, BlockPos from, BlockPos to) {
+        double x1 = from.getX() + 0.5;
+        double y1 = from.getY() + 0.5;
+        double z1 = from.getZ() + 0.5;
+
+        double x2 = to.getX() + 0.5;
+        double y2 = to.getY() + 0.5;
+        double z2 = to.getZ() + 0.5;
+
+        int steps = 20; // number of points along the line
+
+        for (int i = 0; i <= steps; i++) {
+            double t = i / (double) steps;
+
+            double x = x1 + (x2 - x1) * t;
+            double y = y1 + (y2 - y1) * t;
+            double z = z1 + (z2 - z1) * t;
+
+            world.sendParticles(
+                    ParticleTypes.HAPPY_VILLAGER,
+                    x, y, z,
+                    1,   // count
+                    0, 0, 0, // no spread
+                    0     // no speed
+            );
+        }
+    }
+
 
 }
