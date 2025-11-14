@@ -3,8 +3,11 @@ package com.example;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.core.*;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
@@ -57,6 +60,19 @@ public class ExampleMod implements ModInitializer {
             if (!filters.isEmpty()) {
                 InteractionResult result = getVillagerForLectern(player, world, clickedPos, filters);
                 if (result != null) {
+                    if (result == InteractionResult.SUCCESS) {
+                        // green “happy villager” particles
+                        ((ServerLevel) world).sendParticles(
+                                ParticleTypes.HAPPY_VILLAGER,
+                                clickedPos.getX() + 0.5,
+                                clickedPos.getY() + 1,
+                                clickedPos.getZ() + 0.5,
+                                8, 0.3, 0.3, 0.3, 0.01
+                        );
+                        world.playSound(null, clickedPos,
+                                SoundEvents.VILLAGER_YES,
+                                SoundSource.NEUTRAL, 1f, 1f);
+                    }
                     return result;
                 }
             }
@@ -74,11 +90,16 @@ public class ExampleMod implements ModInitializer {
                         if (StringUtils.isNumeric(filterText[1])) {
                             int enchLevel = Integer.parseInt(filterText[1]);
                             if (enchLevel > 0) {
-                                filters.add(new EnchFilter(filterText[0], enchLevel));
+                                if (filterText.length > 2 && StringUtils.isNumeric(filterText[2])) {
+                                    int price = Integer.parseInt(filterText[2]);
+                                    filters.add(new EnchFilter(filterText[0], enchLevel, price));
+                                } else {
+                                    filters.add(new EnchFilter(filterText[0], enchLevel, 0));
+                                }
                             }
                         }
                     } else {
-                        filters.add(new EnchFilter(filterText[0], 0));
+                        filters.add(new EnchFilter(filterText[0], 0, 0));
                     }
                 }
             }
@@ -155,7 +176,6 @@ public class ExampleMod implements ModInitializer {
                     Holder<VillagerProfession> librarianProfession = access.getOrThrow(VillagerProfession.LIBRARIAN);
                     villager.setVillagerData(villager.getVillagerData().withProfession(librarianProfession));
                     recycleCount++;
-                    System.out.println("recycleCount " + recycleCount);
 
                     // --- Check trades ---
                     MerchantOffers offers = villager.getOffers();
@@ -186,9 +206,17 @@ public class ExampleMod implements ModInitializer {
                                             expectedLevel = enchantment.getMaxLevel();
                                         }
                                         if (enchBookLevel == expectedLevel) {
-                                            cooldownMap.put(playerUUID, currentTime);
-                                            System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
-                                            return InteractionResult.SUCCESS;
+                                            if (filter.price > 0) {
+                                                if (trade.getCostA().getCount() <= filter.price) {
+                                                    cooldownMap.put(playerUUID, currentTime);
+                                                    System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                                                    return InteractionResult.SUCCESS;
+                                                }
+                                            } else {
+                                                cooldownMap.put(playerUUID, currentTime);
+                                                System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                                                return InteractionResult.SUCCESS;
+                                            }
                                         }
                                     }
                                 }
@@ -201,6 +229,6 @@ public class ExampleMod implements ModInitializer {
         return InteractionResult.PASS;
     }
 
-    public record EnchFilter(String enchName, int enchLevel) {
+    public record EnchFilter(String enchName, int enchLevel, int price) {
     }
 }
