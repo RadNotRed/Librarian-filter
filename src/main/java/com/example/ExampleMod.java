@@ -58,22 +58,30 @@ public class ExampleMod implements ModInitializer {
             List<String> signTexts = getSignTexts(world, blockClicked, clickedPos);
             List<EnchFilter> filters = getEnchFilters(signTexts);
             if (!filters.isEmpty()) {
-                InteractionResult result = getVillagerForLectern(player, world, clickedPos, filters);
-                if (result != null) {
-                    if (result == InteractionResult.SUCCESS) {
-                        // green “happy villager” particles
-                        ((ServerLevel) world).sendParticles(
-                                ParticleTypes.HAPPY_VILLAGER,
-                                clickedPos.getX() + 0.5,
-                                clickedPos.getY() + 1,
-                                clickedPos.getZ() + 0.5,
-                                8, 0.3, 0.3, 0.3, 0.01
-                        );
-                        world.playSound(null, clickedPos,
-                                SoundEvents.VILLAGER_YES,
-                                SoundSource.NEUTRAL, 1f, 1f);
-                    }
-                    return result;
+                FilterResult filterResult = getVillagerForLectern(player, world, clickedPos, filters);
+                if (filterResult == FilterResult.SUCCESS) {
+                    ((ServerLevel) world).sendParticles(
+                            ParticleTypes.HAPPY_VILLAGER,
+                            clickedPos.getX() + 0.5,
+                            clickedPos.getY() + 1,
+                            clickedPos.getZ() + 0.5,
+                            8, 0.3, 0.3, 0.3, 0.01
+                    );
+                    world.playSound(null, clickedPos,
+                            SoundEvents.VILLAGER_YES,
+                            SoundSource.NEUTRAL, 1f, 1f);
+                }
+                if (filterResult == FilterResult.FAILED) {
+                    ((ServerLevel) world).sendParticles(
+                            ParticleTypes.ANGRY_VILLAGER,
+                            clickedPos.getX() + 0.5,
+                            clickedPos.getY() + 1,
+                            clickedPos.getZ() + 0.5,
+                            8, 0.3, 0.3, 0.3, 0.01
+                    );
+                    world.playSound(null, clickedPos,
+                            SoundEvents.VILLAGER_NO,
+                            SoundSource.NEUTRAL, 1f, 1f);
                 }
             }
             return InteractionResult.PASS; // Continue normal behavior for other blocks
@@ -127,7 +135,7 @@ public class ExampleMod implements ModInitializer {
         return null;
     }
 
-    private InteractionResult getVillagerForLectern(Player player, Level world, BlockPos clickedPos, List<EnchFilter> filters) {
+    private FilterResult getVillagerForLectern(Player player, Level world, BlockPos clickedPos, List<EnchFilter> filters) {
         AABB box = player.getBoundingBox().inflate(VILLAGER_SEARCH_RADIUS); // use inflate, not expandTowards
 
         List<Villager> nearbyVillagers = world.getEntitiesOfClass(Villager.class, box, v -> true);
@@ -149,7 +157,7 @@ public class ExampleMod implements ModInitializer {
         return null;
     }
 
-    private InteractionResult filterTrade(Player player, Level world, Villager villager, List<EnchFilter> filters) {
+    private FilterResult filterTrade(Player player, Level world, Villager villager, List<EnchFilter> filters) {
         if (world instanceof ServerLevel) {
             UUID playerUUID = player.getUUID();
             long currentTime = System.currentTimeMillis();
@@ -158,7 +166,7 @@ public class ExampleMod implements ModInitializer {
                 long lastClickTime = cooldownMap.get(playerUUID);
                 long difference = currentTime - lastClickTime;
                 if (difference < COOLDOWN_TIME) {
-                    return InteractionResult.FAIL; // Prevents further execution
+                    return FilterResult.COOLDOWN; // Prevents further execution
                 }
             }
             if (villager != null && !world.isClientSide()) {
@@ -210,12 +218,15 @@ public class ExampleMod implements ModInitializer {
                                                 if (trade.getCostA().getCount() <= filter.price) {
                                                     cooldownMap.put(playerUUID, currentTime);
                                                     System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
-                                                    return InteractionResult.SUCCESS;
+                                                    return FilterResult.SUCCESS;
                                                 }
                                             } else {
-                                                cooldownMap.put(playerUUID, currentTime);
-                                                System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
-                                                return InteractionResult.SUCCESS;
+                                                Integer minPrice = getPriceMap().get(expectedLevel);
+                                                if (trade.getCostA().getCount() == minPrice) {
+                                                    cooldownMap.put(playerUUID, currentTime);
+                                                    System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                                                    return FilterResult.SUCCESS;
+                                                }
                                             }
                                         }
                                     }
@@ -224,11 +235,28 @@ public class ExampleMod implements ModInitializer {
                         }
                     }
                 }
+
             }
         }
-        return InteractionResult.PASS;
+        return FilterResult.FAILED;
     }
 
     public record EnchFilter(String enchName, int enchLevel, int price) {
     }
+
+    Map<Integer, Integer> getPriceMap() {
+        return Map.of(
+                1, 5,
+                2, 8,
+                3, 11,
+                4, 14,
+                5, 17);
+    }
+
+    enum FilterResult {
+        SUCCESS,
+        FAILED,
+        COOLDOWN
+    }
+
 }
