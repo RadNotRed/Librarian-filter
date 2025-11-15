@@ -9,8 +9,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerData;
 import net.minecraft.world.entity.npc.VillagerProfession;
@@ -26,8 +28,12 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LecternBlock;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,25 +63,20 @@ public class ExampleMod implements ModInitializer {
             BlockPos clickedPos = hitResult.getBlockPos();
             UUID playerUUID = player.getUUID();
             long currentTime = System.currentTimeMillis();
-            // Check if the player is still on cooldown
-            if (cooldownMap.containsKey(playerUUID)) {
-                Long lastClickTime = cooldownMap.get(playerUUID).get(clickedPos);
-                if (lastClickTime != null) {
-                    long difference = currentTime - lastClickTime;
-                    if (difference < COOLDOWN_TIME) {
-                        return InteractionResult.PASS;  // Prevents further execution
-                    }
-                }
-
+            if (isRerollCooldown(playerUUID, clickedPos, currentTime)) {
+                return InteractionResult.PASS;
             }
             Block blockClicked = world.getBlockState(clickedPos).getBlock();
             List<String> signTexts = getSignTexts(world, blockClicked, clickedPos);
-            List<EnchFilter> filters = getEnchFilters(signTexts);
-            if (!filters.isEmpty()) {
-                Villager villager = getVillagerForLectern(player, world, clickedPos, filters);
+            if (signTexts.isEmpty()) {
+                return InteractionResult.PASS;
+            }
+            List<TradeFilter> filters = getEnchFilters(signTexts);
+            if (!filters.isEmpty() && world instanceof ServerLevel) {
+                Villager villager = getVillagerForWorkstation(player, (ServerLevel) world, clickedPos);
                 if (villager != null) {
-                    FilterResult filterResult = filterTrade(player, world, villager, filters);
-                    spawnParticles(world, filterResult, villager, clickedPos);
+                    FilterResult filterResult = filterTrade(villager, filters);
+                    spawnParticles((ServerLevel) world, filterResult, villager, clickedPos);
                     cooldownMap.put(playerUUID, Map.of(clickedPos, currentTime));
                 }
             }
@@ -83,8 +84,22 @@ public class ExampleMod implements ModInitializer {
         });
     }
 
-    private List<EnchFilter> getEnchFilters(List<String> signTexts) {
-        List<EnchFilter> filters = new ArrayList<>();
+    private Boolean isRerollCooldown(UUID playerUUID, BlockPos clickedPos, long currentTime) {
+        // Check if the player is still on cooldown
+        if (cooldownMap.containsKey(playerUUID)) {
+            Long lastClickTime = cooldownMap.get(playerUUID).get(clickedPos);
+            if (lastClickTime != null) {
+                long difference = currentTime - lastClickTime;
+                if (difference < COOLDOWN_TIME) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private List<TradeFilter> getEnchFilters(List<String> signTexts) {
+        List<TradeFilter> filters = new ArrayList<>();
         if (signTexts != null) {
             for (String line : signTexts) {
                 if (line != null && !line.isEmpty()) {
@@ -95,14 +110,14 @@ public class ExampleMod implements ModInitializer {
                             if (enchLevel > 0) {
                                 if (filterText.length > 2 && StringUtils.isNumeric(filterText[2])) {
                                     int price = Integer.parseInt(filterText[2]);
-                                    filters.add(new EnchFilter(filterText[0], enchLevel, price));
+                                    filters.add(new TradeFilter(filterText[0], enchLevel, price));
                                 } else {
-                                    filters.add(new EnchFilter(filterText[0], enchLevel, 0));
+                                    filters.add(new TradeFilter(filterText[0], enchLevel, 0));
                                 }
                             }
                         }
                     } else {
-                        filters.add(new EnchFilter(filterText[0], 0, 0));
+                        filters.add(new TradeFilter(filterText[0], 0, 0));
                     }
                 }
             }
@@ -127,10 +142,25 @@ public class ExampleMod implements ModInitializer {
             }
 
         }
-        return null;
+
+        if (blockClicked != Blocks.AIR) {
+            // Get the facing direction
+            BlockState blockState = world.getBlockState(clickedPos);
+            if (PoiTypes.hasPoi(blockState)) {
+                SignBlockEntity signEntity = getAttachedSign(world, clickedPos);
+                // Get the position in front of the lectern (based on its facing direction)
+                // Get the BlockEntity (SignBlockEntity) of the WallSign
+                if (signEntity != null) {
+                    // Retrieve the text written on the sign
+                    return Arrays.stream(signEntity.getFrontText().getMessages(false)).map(Component::getString).toList();
+                }
+            }
+        }
+
+        return new ArrayList<>();
     }
 
-    private Villager getVillagerForLectern(Player player, Level world, BlockPos clickedPos, List<EnchFilter> filters) {
+    private Villager getVillagerForWorkstation(Player player, ServerLevel world, BlockPos clickedPos) {
         AABB box = player.getBoundingBox().inflate(VILLAGER_SEARCH_RADIUS); // use inflate, not expandTowards
 
         List<Villager> nearbyVillagers = world.getEntitiesOfClass(Villager.class, box, v -> true);
@@ -147,124 +177,146 @@ public class ExampleMod implements ModInitializer {
                         }
                     }
                 }
+            } else {
+                Optional<GlobalPos> jobSitePosOptional = villager.getBrain().getMemory(MemoryModuleType.JOB_SITE);
+                // Convert GlobalPos to BlockPos and compare with clicked block
+                if (jobSitePosOptional.isPresent()) {
+                    BlockPos jobSitePos = jobSitePosOptional.get().pos(); // Extract BlockPos from GlobalPos
+                    if (jobSitePos.equals(clickedPos)) {
+                        if (villager.getVillagerXp() == 0) {
+                            return villager;
+                        }
+                    }
+                }
             }
         }
         return null;
     }
 
-    private FilterResult filterTrade(Player player, Level world, Villager villager, List<EnchFilter> filters) {
-        if (world instanceof ServerLevel) {
-            UUID playerUUID = player.getUUID();
-            long currentTime = System.currentTimeMillis();
-            // Check if the player is still on cooldown
-//            if (cooldownMap.containsKey(playerUUID)) {
-//                long lastClickTime = cooldownMap.get(playerUUID);
-//                long difference = currentTime - lastClickTime;
-//                if (difference < COOLDOWN_TIME) {
-//                    return FilterResult.COOLDOWN; // Prevents further execution
-//                }
-//            }
-            if (villager != null && !world.isClientSide()) {
-                RegistryAccess access = villager.level().registryAccess();
-                int recycleCount = 0;
+    private FilterResult filterTrade(Villager villager, List<TradeFilter> filters) {
+        if (villager != null) {
+            RegistryAccess access = villager.level().registryAccess();
+            int recycleCount = 0;
+            while (recycleCount <= MAX_REROLL_COUNT) {
+                // --- Reset profession to NONE ---
+                VillagerData data = villager.getVillagerData();
+                Holder<VillagerProfession> profession = villager.getVillagerData().profession();
+                Holder<VillagerProfession> noneProfession = access.getOrThrow(VillagerProfession.NONE);
+                villager.setVillagerData(data.withProfession(noneProfession));
+                // --- Reassign to same profession ---
+                villager.setVillagerData(villager.getVillagerData().withProfession(profession));
 
-                while (recycleCount <= MAX_REROLL_COUNT - 1) {
-                    // --- Reset profession to NONE ---
-                    VillagerData data = villager.getVillagerData();
-                    Holder<VillagerProfession> noneProfession = access.getOrThrow(VillagerProfession.NONE);
-                    villager.setVillagerData(data.withProfession(noneProfession));
+                recycleCount++;
 
-
-                    // --- Reassign to LIBRARIAN ---
-                    Holder<VillagerProfession> librarianProfession = access.getOrThrow(VillagerProfession.LIBRARIAN);
-                    villager.setVillagerData(villager.getVillagerData().withProfession(librarianProfession));
-                    recycleCount++;
-
-                    // --- Check trades ---
-                    MerchantOffers offers = villager.getOffers();
-                    for (MerchantOffer trade : offers) {
-                        ItemStack sellItem = trade.getResult();
-
-                        // Only look at enchanted books
-                        if (sellItem.getItem() == Items.ENCHANTED_BOOK) {
-                            ItemEnchantments enchantments = sellItem.getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
-
-                            for (var entry : enchantments.entrySet()) {
-                                Holder<Enchantment> enchHolder = entry.getKey();
-                                int enchBookLevel = entry.getIntValue();
-
-                                // Get the simple name (e.g., "efficiency")
-                                String enchName = enchHolder.unwrapKey()
-                                        .map(k -> k.location().getPath())
-                                        .orElse("unknown");
-
-                                System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel + " price " + trade.getCostA().getCount());
-
-                                // Compare with filters (partial match, exact enchBookLevel)
-                                for (EnchFilter filter : filters) {
-                                    int expectedLevel = filter.enchLevel;
-                                    if (enchName.startsWith(filter.enchName.toLowerCase())) {
-                                        if (expectedLevel == 0) {
-                                            Enchantment enchantment = enchHolder.value();
-                                            expectedLevel = enchantment.getMaxLevel();
-                                        }
-                                        if (enchBookLevel == expectedLevel) {
-                                            if (filter.price > 0) {
-                                                if (trade.getCostA().getCount() <= filter.price) {
-
-                                                    System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
-                                                    return FilterResult.SUCCESS;
-                                                }
-                                            } else {
-                                                System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
-                                                return FilterResult.SUCCESS;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                // --- Check trades ---
+                MerchantOffers offers = villager.getOffers();
+                for (MerchantOffer trade : offers) {
+                    // Only look at enchanted books
+                    if (profession.is(VillagerProfession.LIBRARIAN) && trade.getResult().getItem() == Items.ENCHANTED_BOOK) {
+                        FilterResult result = filterEnchantmentBook(filters, trade);
+                        if (result == FilterResult.SUCCESS) return result;
+                    } else {
+                        FilterResult result = filterTrades(filters, trade);
+                        if (result == FilterResult.SUCCESS) return result;
                     }
                 }
-
             }
         }
         return FilterResult.FAILED;
     }
 
-    public record EnchFilter(String enchName, int enchLevel, int price) {
+    private static @Nullable FilterResult filterEnchantmentBook(List<TradeFilter> filters, MerchantOffer trade) {
+        ItemEnchantments enchantments = trade.getResult().getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
+        for (var entry : enchantments.entrySet()) {
+            Holder<Enchantment> enchHolder = entry.getKey();
+            int enchBookLevel = entry.getIntValue();
+
+            // Get the simple name (e.g., "efficiency")
+            String enchName = enchHolder.unwrapKey()
+                    .map(k -> k.location().getPath())
+                    .orElse("unknown");
+
+            System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel + " price " + trade.getCostA().getCount());
+
+            // Compare with filters (partial match, exact enchBookLevel)
+            for (TradeFilter filter : filters) {
+                int expectedLevel = filter.enchLevel;
+                if (enchName.startsWith(filter.filterName)) {
+                    if (expectedLevel == 0) {
+                        Enchantment enchantment = enchHolder.value();
+                        expectedLevel = enchantment.getMaxLevel();
+                    }
+                    if (enchBookLevel == expectedLevel) {
+                        if (filter.price > 0) {
+                            if (trade.getCostA().getCount() <= filter.price) {
+                                System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                                return FilterResult.SUCCESS;
+                            }
+                        } else {
+                            System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+                            return FilterResult.SUCCESS;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
-    Map<Integer, Integer> getPriceMap() {
-        return Map.of(
-                1, 5,
-                2, 8,
-                3, 11,
-                4, 14,
-                5, 17);
+    private static @Nullable FilterResult filterTrades(List<TradeFilter> filters, MerchantOffer trade) {
+        String sellItemName = trade.getResult().getItemName().getString().toLowerCase();
+        System.out.println("✅ Found sellItem: " + sellItemName);
+        Optional<TradeFilter> filteredTrade;
+        filteredTrade = filters.stream().filter(f -> sellItemName.contains(formatFilterName(f))).findFirst();
+        if (filteredTrade.isPresent()) {
+            return FilterResult.SUCCESS;
+        }
+        String buyItem1Name = trade.getCostA().getItemName().getString().toLowerCase();
+        System.out.println("✅ Found BuyIem1: " + buyItem1Name);
+        filteredTrade = filters.stream().filter(f -> buyItem1Name.contains(formatFilterName(f))).findFirst();
+        if (filteredTrade.isPresent()) {
+            return FilterResult.SUCCESS;
+        }
+
+        ItemStack costB = trade.getCostB();
+        if (costB != ItemStack.EMPTY) {
+            String buyItem2Name = costB.getItemName().getString().toLowerCase();
+            System.out.println("✅ Found BuyIem2: " + buyItem2Name);
+            filteredTrade = filters.stream().filter(f -> buyItem2Name.contains(formatFilterName(f))).findFirst();
+            if (filteredTrade.isPresent()) {
+                return FilterResult.SUCCESS;
+            }
+        }
+
+        return null;
+    }
+
+    private static @NotNull String formatFilterName(TradeFilter f) {
+        return f.filterName.toLowerCase().replaceAll("_", " ");
+    }
+
+    public record TradeFilter(String filterName, int enchLevel, int price) {
     }
 
     enum FilterResult {
         SUCCESS,
-        FAILED,
-        COOLDOWN
+        FAILED
     }
 
-
-    private void spawnParticles(Level world, FilterResult filterResult, Villager villager, BlockPos clickedPos) {
+    private void spawnParticles(ServerLevel world, FilterResult filterResult, Villager villager, BlockPos clickedPos) {
         if (filterResult == FilterResult.SUCCESS) {
             world.playSound(null, villager,
                     SoundEvents.VILLAGER_YES,
                     SoundSource.NEUTRAL, 1f, 1f);
             for (int i = 0; i < durationTicks; i++) {
-                ((ServerLevel) world).sendParticles(
+                world.sendParticles(
                         ParticleTypes.HAPPY_VILLAGER,
                         villager.getX() + 0.5,
                         villager.getY() + 1,
                         villager.getZ() + 0.5,
                         8, 0.3, 0.3, 0.3, 0.01
                 );
-                ((ServerLevel) world).sendParticles(
+                world.sendParticles(
                         ParticleTypes.HAPPY_VILLAGER,
                         clickedPos.getX() + 0.5,
                         clickedPos.getY() + 1,
@@ -278,14 +330,14 @@ public class ExampleMod implements ModInitializer {
                     SoundEvents.VILLAGER_NO,
                     SoundSource.NEUTRAL, 1f, 1f);
             for (int i = 0; i < durationTicks; i++) {
-                ((ServerLevel) world).sendParticles(
+                world.sendParticles(
                         ParticleTypes.ANGRY_VILLAGER,
                         villager.getX() + 0.5,
                         villager.getY() + 1,
                         villager.getZ() + 0.5,
                         8, 0.3, 0.3, 0.3, 0.01
                 );
-                ((ServerLevel) world).sendParticles(
+                world.sendParticles(
                         ParticleTypes.ANGRY_VILLAGER,
                         clickedPos.getX() + 0.5,
                         clickedPos.getY() + 1,
@@ -323,6 +375,18 @@ public class ExampleMod implements ModInitializer {
                     0     // no speed
             );
         }
+    }
+
+
+    public static SignBlockEntity getAttachedSign(Level world, BlockPos pos) {
+        for (Direction dir : Direction.Plane.HORIZONTAL) {
+            BlockPos side = pos.relative(dir);
+            // check if it is any sign (standing/wall, modded/vanilla)
+            if (world.getBlockEntity(side) instanceof SignBlockEntity signEntity) {
+                return signEntity;
+            }
+        }
+        return null;
     }
 
 
