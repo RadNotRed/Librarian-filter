@@ -9,7 +9,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
@@ -21,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.Level;
@@ -29,7 +29,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LecternBlock;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -76,6 +75,7 @@ public class ExampleMod implements ModInitializer {
                 Villager villager = getVillagerForWorkstation(player, (ServerLevel) world, clickedPos);
                 if (villager != null) {
                     FilterResult filterResult = filterTrade(villager, filters);
+                    villager.refreshBrain((ServerLevel) world);
                     spawnParticles((ServerLevel) world, filterResult, villager, clickedPos);
                     cooldownMap.put(playerUUID, Map.of(clickedPos, currentTime));
                 }
@@ -206,26 +206,35 @@ public class ExampleMod implements ModInitializer {
                 // --- Reassign to same profession ---
                 villager.setVillagerData(villager.getVillagerData().withProfession(profession));
 
-                recycleCount++;
 
+                recycleCount++;
+                System.out.println("✅ Retry count: " + recycleCount);
                 // --- Check trades ---
                 MerchantOffers offers = villager.getOffers();
+                int tradeIndex = 0;
                 for (MerchantOffer trade : offers) {
                     // Only look at enchanted books
                     if (profession.is(VillagerProfession.LIBRARIAN) && trade.getResult().getItem() == Items.ENCHANTED_BOOK) {
-                        FilterResult result = filterEnchantmentBook(filters, trade);
-                        if (result == FilterResult.SUCCESS) return result;
+                        FilterResult result = filterEnchantmentBook(filters, trade, villager, tradeIndex);
+                        if (result == FilterResult.SUCCESS) {
+                            System.out.println("✅ Retry count: " + recycleCount);
+                            return result;
+                        }
                     } else {
                         FilterResult result = filterTrades(filters, trade);
-                        if (result == FilterResult.SUCCESS) return result;
+                        if (result == FilterResult.SUCCESS) {
+                            System.out.println("✅ Retry count: " + recycleCount);
+                            return result;
+                        }
                     }
+                    tradeIndex++;
                 }
             }
         }
         return FilterResult.FAILED;
     }
 
-    private static @Nullable FilterResult filterEnchantmentBook(List<TradeFilter> filters, MerchantOffer trade) {
+    private FilterResult filterEnchantmentBook(List<TradeFilter> filters, MerchantOffer trade, Villager villager, int tradeIndex) {
         ItemEnchantments enchantments = trade.getResult().getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
         for (var entry : enchantments.entrySet()) {
             Holder<Enchantment> enchHolder = entry.getKey();
@@ -253,6 +262,11 @@ public class ExampleMod implements ModInitializer {
                                 return FilterResult.SUCCESS;
                             }
                         } else {
+//                            MerchantOffers offers = villager.getOffers();
+//                            MerchantOffer old = offers.get(tradeIndex);
+//                            ItemCost newCostA = new ItemCost(Items.EMERALD, getPriceMap().get(expectedLevel));
+//                            MerchantOffer updated = new MerchantOffer(newCostA, Optional.empty(), old.getResult(), old.getMaxUses(), old.getXp(), old.getPriceMultiplier());
+//                            offers.set(tradeIndex, updated);
                             System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
                             return FilterResult.SUCCESS;
                         }
@@ -296,6 +310,15 @@ public class ExampleMod implements ModInitializer {
     }
 
     public record TradeFilter(String filterName, int enchLevel, int price) {
+    }
+
+    private static Map<Integer, Integer> getPriceMap() {
+        return Map.of(
+                1, 5,
+                2, 8,
+                3, 11,
+                4, 14,
+                5, 17);
     }
 
     enum FilterResult {
