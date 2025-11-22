@@ -2,6 +2,9 @@ package net.gbdhapa;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.gbdhapa.config.TradeConfig;
+import net.gbdhapa.network.ModPackets;
+import net.gbdhapa.network.PacketHandlers;
 import net.minecraft.core.*;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
@@ -10,7 +13,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.ai.gossip.GossipType;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
@@ -53,13 +55,21 @@ public class VillagerTrade implements ModInitializer {
     @Override
     public void onInitialize() {
         LOGGER.info("Mod initialized!");
-
+        ModPackets.register();
+        PacketHandlers.register();
         registerEvent();
+    }
+
+    private void register() {
+
     }
 
     private void registerEvent() {
         // Register the event to listen for right-click interactions
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (!TradeConfig.INSTANCE.enableReroll) {
+                return InteractionResult.PASS;
+            }
             BlockPos clickedPos = hitResult.getBlockPos();
             UUID playerUUID = player.getUUID();
             long currentTime = System.currentTimeMillis();
@@ -174,9 +184,13 @@ public class VillagerTrade implements ModInitializer {
                 if (jobSitePosOptional.isPresent()) {
                     BlockPos jobSitePos = jobSitePosOptional.get().pos(); // Extract BlockPos from GlobalPos
                     if (jobSitePos.equals(clickedPos)) {
-//                        if (villager.getVillagerXp() == 0) {
-                        return villager;
-//                        }
+                        TradeConfig.load();
+                        if (TradeConfig.INSTANCE.enableEachLevelReroll) {
+                            return villager;
+                        }
+                        if (villager.getVillagerXp() == 0) {
+                            return villager;
+                        }
                     }
                 }
             } else {
@@ -209,7 +223,6 @@ public class VillagerTrade implements ModInitializer {
                 villager.setVillagerData(data.withProfession(noneProfession));
                 // --- Reassign to same profession ---
                 villager.setVillagerData(villager.getVillagerData().withProfession(profession));
-
 
                 recycleCount++;
                 System.out.println("✅ Retry count: " + recycleCount);
