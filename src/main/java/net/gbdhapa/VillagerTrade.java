@@ -45,7 +45,8 @@ public class VillagerTrade implements ModInitializer {
     private static final HashMap<UUID, Map<BlockPos, Long>> cooldownMap = new HashMap<>();
     private static final long COOLDOWN_TIME = 1000; // in milliseconds
     private static final int VILLAGER_SEARCH_RADIUS = 128; //in blocks
-    private static final int MAX_REROLL_COUNT = 10000; //in blocks
+    private static final int MAX_REROLL_COUNT = 10000;
+    private static final int MAX_PROFESSION_LEVEL = 5;
     private static final int durationTicks = 5; //in ticks
 
 
@@ -199,7 +200,8 @@ public class VillagerTrade implements ModInitializer {
             RegistryAccess access = villager.level().registryAccess();
             int recycleCount = 0;
             MerchantOffers originalOffers = villager.getOffers();
-            while (recycleCount <= MAX_REROLL_COUNT) {
+            int level = villager.getVillagerData().level();
+            while (recycleCount <= MAX_REROLL_COUNT && level < MAX_PROFESSION_LEVEL) {
                 // --- Reset profession to NONE ---
                 VillagerData data = villager.getVillagerData();
                 Holder<VillagerProfession> profession = villager.getVillagerData().profession();
@@ -216,26 +218,23 @@ public class VillagerTrade implements ModInitializer {
                 int tradeIndex = 0;
                 for (MerchantOffer trade : offers) {
                     // Only look at enchanted books
-                    if (profession.is(VillagerProfession.LIBRARIAN) && trade.getResult().getItem() == Items.ENCHANTED_BOOK) {
-                        FilterResult result = filterEnchantmentBook(filters, trade, villager, tradeIndex);
-                        if (result == FilterResult.SUCCESS) {
-                            System.out.println("✅ Retry count: " + recycleCount);
-                            villager.setOffers(new MerchantOffers());
-                            originalOffers.removeLast();
-                            originalOffers.removeLast();
-                            originalOffers.addAll(offers);
-                            villager.setOffers(originalOffers);
-                            return result;
+                    if (profession.is(VillagerProfession.LIBRARIAN)) {
+                        if (trade.getResult().getItem() == Items.ENCHANTED_BOOK) {
+                            FilterResult result = filterEnchantmentBook(filters, trade, villager, tradeIndex);
+                            if (result == FilterResult.SUCCESS) {
+                                System.out.println("✅ Retry count: " + recycleCount);
+                                villager.setOffers(new MerchantOffers());
+                                originalOffers.removeLast();
+                                originalOffers.removeLast();
+                                originalOffers.addAll(offers);
+                                villager.setOffers(originalOffers);
+                                return result;
+                            }
                         }
                     } else {
                         FilterResult result = filterTrades(filters, trade);
                         if (result == FilterResult.SUCCESS) {
                             System.out.println("✅ Retry count: " + recycleCount);
-                            villager.setOffers(new MerchantOffers());
-                            originalOffers.removeLast();
-                            originalOffers.removeLast();
-                            originalOffers.addAll(offers);
-                            villager.setOffers(originalOffers);
                             return result;
                         }
                     }
