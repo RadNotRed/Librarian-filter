@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.ai.gossip.GossipType;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.npc.Villager;
@@ -73,6 +74,7 @@ public class VillagerTrade implements ModInitializer {
             if (!filters.isEmpty() && world instanceof ServerLevel) {
                 Villager villager = getVillagerForWorkstation(player, (ServerLevel) world, clickedPos);
                 if (villager != null) {
+                    villager.getGossips().add(playerUUID, GossipType.MAJOR_POSITIVE, 100);
                     FilterResult filterResult = filterTrade(villager, filters);
                     villager.refreshBrain((ServerLevel) world);
                     spawnParticles((ServerLevel) world, filterResult, villager, clickedPos);
@@ -171,9 +173,9 @@ public class VillagerTrade implements ModInitializer {
                 if (jobSitePosOptional.isPresent()) {
                     BlockPos jobSitePos = jobSitePosOptional.get().pos(); // Extract BlockPos from GlobalPos
                     if (jobSitePos.equals(clickedPos)) {
-                        if (villager.getVillagerXp() == 0) {
-                            return villager;
-                        }
+//                        if (villager.getVillagerXp() == 0) {
+                        return villager;
+//                        }
                     }
                 }
             } else {
@@ -196,6 +198,7 @@ public class VillagerTrade implements ModInitializer {
         if (villager != null) {
             RegistryAccess access = villager.level().registryAccess();
             int recycleCount = 0;
+            MerchantOffers originalOffers = villager.getOffers();
             while (recycleCount <= MAX_REROLL_COUNT) {
                 // --- Reset profession to NONE ---
                 VillagerData data = villager.getVillagerData();
@@ -217,12 +220,22 @@ public class VillagerTrade implements ModInitializer {
                         FilterResult result = filterEnchantmentBook(filters, trade, villager, tradeIndex);
                         if (result == FilterResult.SUCCESS) {
                             System.out.println("✅ Retry count: " + recycleCount);
+                            villager.setOffers(new MerchantOffers());
+                            originalOffers.removeLast();
+                            originalOffers.removeLast();
+                            originalOffers.addAll(offers);
+                            villager.setOffers(originalOffers);
                             return result;
                         }
                     } else {
                         FilterResult result = filterTrades(filters, trade);
                         if (result == FilterResult.SUCCESS) {
                             System.out.println("✅ Retry count: " + recycleCount);
+                            villager.setOffers(new MerchantOffers());
+                            originalOffers.removeLast();
+                            originalOffers.removeLast();
+                            originalOffers.addAll(offers);
+                            villager.setOffers(originalOffers);
                             return result;
                         }
                     }
