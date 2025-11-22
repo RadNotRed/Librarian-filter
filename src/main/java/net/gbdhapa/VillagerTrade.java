@@ -75,7 +75,7 @@ public class VillagerTrade implements ModInitializer {
             if (!filters.isEmpty() && world instanceof ServerLevel) {
                 Villager villager = getVillagerForWorkstation(player, (ServerLevel) world, clickedPos);
                 if (villager != null) {
-                    villager.getGossips().add(playerUUID, GossipType.MAJOR_POSITIVE, 100);
+//                    villager.getGossips().add(playerUUID, GossipType.MAJOR_POSITIVE, 100);
                     FilterResult filterResult = filterTrade(villager, filters);
                     villager.refreshBrain((ServerLevel) world);
                     spawnParticles((ServerLevel) world, filterResult, villager, clickedPos);
