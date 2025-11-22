@@ -1,4 +1,4 @@
-package com.example;
+package net.gbdhapa;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -20,7 +20,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
-import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.Level;
@@ -38,7 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class ExampleMod implements ModInitializer {
+public class VillagerTrade implements ModInitializer {
     public static final String MOD_ID = "elt";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 

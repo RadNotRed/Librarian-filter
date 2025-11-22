@@ -1,4 +1,4 @@
-package com.example;
+package net.gbdhapa;
 
 import net.fabricmc.api.ClientModInitializer;
 
