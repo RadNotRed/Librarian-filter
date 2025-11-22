@@ -46,7 +46,7 @@ public class TradeConfigScreen extends Screen {
     }
 
     private String getToggleText() {
-        return "Reroll locked villager Trades:: " + (TradeConfig.INSTANCE.enableEachLevelReroll ? "ON" : "OFF");
+        return "Reroll locked villager Trades: " + (TradeConfig.INSTANCE.enableEachLevelReroll ? "ON" : "OFF");
     }
 
     @Override
