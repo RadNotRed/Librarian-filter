@@ -2,17 +2,16 @@
 	"schemaVersion": 1,
 	"id": "elt",
 	"version": "${version}",
-	"name": "Example mod",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "Easy librarian trade mod",
+	"description": "Mod to get desired enchantment book trade from librarian villager",
 	"authors": [
-		"Me!"
+		"IGxxD"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/gulab9762/Librarian-filter"
 	},
 	"license": "CC0-1.0",
-	"icon": "assets/elt/icon.png",
+	"icon": "assets/elt/elt_icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
