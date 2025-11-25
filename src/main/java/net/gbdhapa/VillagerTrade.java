@@ -287,7 +287,7 @@ public class VillagerTrade implements ModInitializer {
             // Compare with filters (partial match, exact enchBookLevel)
             for (TradeFilter filter : filters) {
                 int expectedLevel = filter.enchLevel;
-                if (enchName.startsWith(filter.filterName)) {
+                if (enchName.toLowerCase().startsWith(filter.filterName.toLowerCase())) {
                     if (expectedLevel == 0) {
                         Enchantment enchantment = enchHolder.value();
                         expectedLevel = enchantment.getMaxLevel();
