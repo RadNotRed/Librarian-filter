@@ -218,8 +218,10 @@ public class VillagerTrade implements ModInitializer {
             RegistryAccess access = villager.level().registryAccess();
             int recycleCount = 0;
             MerchantOffers originalOffers = villager.getOffers();
-            int level = villager.getVillagerData().level();
-            Holder<VillagerProfession> currentProfession = villager.getVillagerData().profession();
+            boolean hasTradedLastOffers = checkIfPlayerHasTradedLastOffers(originalOffers);
+            if (hasTradedLastOffers) {
+                return FilterResult.FAILED;
+            }
             while (recycleCount <= MAX_REROLL_COUNT) {
                 // --- Reset profession to NONE ---
                 VillagerData data = villager.getVillagerData();
@@ -267,6 +269,18 @@ public class VillagerTrade implements ModInitializer {
             villager.setOffers(originalOffers);
         }
         return FilterResult.FAILED;
+    }
+
+    private static boolean checkIfPlayerHasTradedLastOffers(MerchantOffers originalOffers) {
+        int offersSize = originalOffers.size();
+        if (offersSize % 2 == 0) {
+            MerchantOffer secondLast = originalOffers.get(offersSize - 2);
+            MerchantOffer last = originalOffers.get(offersSize - 1);
+            return secondLast.getUses() > 0 || last.getUses() > 0;
+        } else {
+            MerchantOffer last = originalOffers.get(offersSize - 1);
+            return last.getUses() > 0;
+        }
     }
 
     private FilterResult filterEnchantmentBook(List<TradeFilter> filters, MerchantOffer trade) {
