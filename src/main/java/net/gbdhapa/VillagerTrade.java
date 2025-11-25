@@ -233,12 +233,11 @@ public class VillagerTrade implements ModInitializer {
                 System.out.println("✅ Retry count: " + recycleCount);
                 // --- Check trades ---
                 MerchantOffers offers = villager.getOffers();
-                int tradeIndex = 0;
                 for (MerchantOffer trade : offers) {
                     // Only look at enchanted books
                     if (profession.is(VillagerProfession.LIBRARIAN)) {
                         if (trade.getResult().getItem() == Items.ENCHANTED_BOOK) {
-                            FilterResult result = filterEnchantmentBook(filters, trade, villager, tradeIndex);
+                            FilterResult result = filterEnchantmentBook(filters, trade);
                             if (result == FilterResult.SUCCESS) {
                                 System.out.println("✅ Retry count: " + recycleCount);
                                 villager.setOffers(new MerchantOffers());
@@ -261,7 +260,6 @@ public class VillagerTrade implements ModInitializer {
                             return result;
                         }
                     }
-                    tradeIndex++;
                 }
             }
 
@@ -271,7 +269,7 @@ public class VillagerTrade implements ModInitializer {
         return FilterResult.FAILED;
     }
 
-    private FilterResult filterEnchantmentBook(List<TradeFilter> filters, MerchantOffer trade, Villager villager, int tradeIndex) {
+    private FilterResult filterEnchantmentBook(List<TradeFilter> filters, MerchantOffer trade) {
         ItemEnchantments enchantments = trade.getResult().getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
         for (var entry : enchantments.entrySet()) {
             Holder<Enchantment> enchHolder = entry.getKey();
@@ -299,11 +297,6 @@ public class VillagerTrade implements ModInitializer {
                                 return FilterResult.SUCCESS;
                             }
                         } else {
-//                            MerchantOffers offers = villager.getOffers();
-//                            MerchantOffer old = offers.get(tradeIndex);
-//                            ItemCost newCostA = new ItemCost(Items.EMERALD, getPriceMap().get(expectedLevel));
-//                            MerchantOffer updated = new MerchantOffer(newCostA, Optional.empty(), old.getResult(), old.getMaxUses(), old.getXp(), old.getPriceMultiplier());
-//                            offers.set(tradeIndex, updated);
                             System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
                             return FilterResult.SUCCESS;
                         }
