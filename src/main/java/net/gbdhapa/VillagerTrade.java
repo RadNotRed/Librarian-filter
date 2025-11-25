@@ -55,7 +55,7 @@ public class VillagerTrade implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("Mod initialized!");
+        LOGGER.info("Villager trade reroll mod initialized!");
         ModPackets.register();
         PacketHandlers.register();
         registerEvent();
@@ -230,7 +230,7 @@ public class VillagerTrade implements ModInitializer {
                 villager.setVillagerData(villager.getVillagerData().withProfession(profession));
 
                 recycleCount++;
-                System.out.println("✅ Retry count: " + recycleCount);
+//                System.out.println("✅ Retry count: " + recycleCount);
                 // --- Check trades ---
                 MerchantOffers offers = villager.getOffers();
                 for (MerchantOffer trade : offers) {
@@ -239,7 +239,7 @@ public class VillagerTrade implements ModInitializer {
                         if (trade.getResult().getItem() == Items.ENCHANTED_BOOK) {
                             FilterResult result = filterEnchantmentBook(filters, trade);
                             if (result == FilterResult.SUCCESS) {
-                                System.out.println("✅ Retry count: " + recycleCount);
+//                                System.out.println("✅ Retry count: " + recycleCount);
                                 villager.setOffers(new MerchantOffers());
                                 originalOffers.removeLast();
                                 originalOffers.removeLast();
@@ -251,7 +251,7 @@ public class VillagerTrade implements ModInitializer {
                     } else {
                         FilterResult result = filterTrades(filters, trade);
                         if (result == FilterResult.SUCCESS) {
-                            System.out.println("✅ Retry count: " + recycleCount);
+//                            System.out.println("✅ Retry count: " + recycleCount);
                             villager.setOffers(new MerchantOffers());
                             originalOffers.removeLast();
                             originalOffers.removeLast();
@@ -280,7 +280,7 @@ public class VillagerTrade implements ModInitializer {
                     .map(k -> k.location().getPath())
                     .orElse("unknown");
 
-            System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel + " price " + trade.getCostA().getCount());
+//            System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel + " price " + trade.getCostA().getCount());
 
             // Compare with filters (partial match, exact enchBookLevel)
             for (TradeFilter filter : filters) {
@@ -293,11 +293,11 @@ public class VillagerTrade implements ModInitializer {
                     if (enchBookLevel == expectedLevel) {
                         if (filter.price > 0) {
                             if (trade.getCostA().getCount() <= filter.price) {
-                                System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+//                                System.out.println("Found matching enchantment: " + enchName + " " + enchBookLevel);
                                 return FilterResult.SUCCESS;
                             }
                         } else {
-                            System.out.println("✅ Found matching enchantment: " + enchName + " " + enchBookLevel);
+//                            System.out.println("Found matching enchantment: " + enchName + " " + enchBookLevel);
                             return FilterResult.SUCCESS;
                         }
                     }
@@ -309,14 +309,14 @@ public class VillagerTrade implements ModInitializer {
 
     private static @Nullable FilterResult filterTrades(List<TradeFilter> filters, MerchantOffer trade) {
         String sellItemName = trade.getResult().getItemName().getString().toLowerCase();
-        System.out.println("✅ Found sellItem: " + sellItemName);
+//        System.out.println("✅ Found sellItem: " + sellItemName);
         Optional<TradeFilter> filteredTrade;
         filteredTrade = filters.stream().filter(f -> sellItemName.contains(formatFilterName(f))).findFirst();
         if (filteredTrade.isPresent()) {
             return FilterResult.SUCCESS;
         }
         String buyItem1Name = trade.getCostA().getItemName().getString().toLowerCase();
-        System.out.println("✅ Found BuyIem1: " + buyItem1Name);
+//        System.out.println("✅ Found BuyIem1: " + buyItem1Name);
         filteredTrade = filters.stream().filter(f -> buyItem1Name.contains(formatFilterName(f))).findFirst();
         if (filteredTrade.isPresent()) {
             return FilterResult.SUCCESS;
@@ -325,7 +325,7 @@ public class VillagerTrade implements ModInitializer {
         ItemStack costB = trade.getCostB();
         if (costB != ItemStack.EMPTY) {
             String buyItem2Name = costB.getItemName().getString().toLowerCase();
-            System.out.println("✅ Found BuyIem2: " + buyItem2Name);
+//            System.out.println("✅ Found BuyIem2: " + buyItem2Name);
             filteredTrade = filters.stream().filter(f -> buyItem2Name.contains(formatFilterName(f))).findFirst();
             if (filteredTrade.isPresent()) {
                 return FilterResult.SUCCESS;
