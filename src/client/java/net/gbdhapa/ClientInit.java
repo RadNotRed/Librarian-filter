@@ -15,7 +15,7 @@ public class ClientInit {
                 KeyBindingHelper.registerKeyBinding(new KeyMapping(
                         "key.elt.open_trade_config",
                         InputConstants.KEY_O,                   // default key
-                        KeyMapping.Category.GAMEPLAY  // category in keybind menu
+                        KeyMapping.CATEGORY_GAMEPLAY  // category in keybind menu
                 ));
         // receive server response
         ClientPlayNetworking.registerGlobalReceiver(
