@@ -1,20 +1,16 @@
 package net.gbdhapa;
 
 
-import com.mojang.brigadier.arguments.ArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-
-import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.phys.AABB;
 
 import java.util.Collection;
@@ -27,14 +23,29 @@ public class CountCommand {
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            EntityType<Villager> type = EntityType.VILLAGER;
             dispatcher.register(
                     net.minecraft.commands.Commands.literal("count")
+                            .requires(source -> true)
                             .then(Commands.argument("entity", EntityArgument.entities())
                                     .suggests((ctx, builder) -> {
+                                        String input = builder.getRemaining(); // partial text
+
+                                        // Base selector suggestions
+                                        if (input.isEmpty() || "@".startsWith(input)) {
+                                            builder.suggest("@e");
+                                            builder.suggest("@p");
+                                            builder.suggest("@a");
+                                            builder.suggest("@s");
+                                        }
+
+                                        // Entity type suggestions wrapped in selector
                                         BuiltInRegistries.ENTITY_TYPE.keySet().forEach(id -> {
-                                            builder.suggest("@e[type=" + id + "]");
+                                            String suggestion = "@e[type=" + id + "]";
+                                            if (suggestion.startsWith(input)) {
+                                                builder.suggest(suggestion);
+                                            }
                                         });
+
                                         return builder.buildFuture();
                                     })
                                     .executes(ctx -> execute(
@@ -49,6 +60,23 @@ public class CountCommand {
                                                     DoubleArgumentType.getDouble(ctx, "radius")
                                             ))
                                     )
+                            )
+            );
+        });
+
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(
+                    Commands.literal("count")
+                            .requires(source -> true)
+                            .executes(ctx -> execute(
+                                    ctx.getSource(),
+                                    128
+                            ))
+                            .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1))
+                                    .executes(ctx -> execute(
+                                            ctx.getSource(),
+                                            DoubleArgumentType.getDouble(ctx, "radius")
+                                    ))
                             )
             );
         });
@@ -68,41 +96,7 @@ public class CountCommand {
                 box,
                 e -> entities.contains(e) && e.distanceToSqr(center) <= radius * radius
         );
-        int count = entitiesInRange.size();
-        Map<String, Long> entityCountMap =
-                entitiesInRange.stream()
-                        .collect(Collectors.groupingBy(
-                                e -> e.getType().toShortString(),
-                                Collectors.counting()
-                        ));
-        if (count > 1) {
-            source.sendSuccess(
-                    () -> Component.literal("=============ENTITIES COUNT===================="),
-                    false
-            );
-            entityCountMap.forEach((entityName, entityCount)->{
-                source.sendSuccess(
-                        () -> Component.literal(entityCount + " " + entityName + "s within " + (int) radius + " blocks"),
-                        false
-                );
-            });
-            source.sendSuccess(
-                    () -> Component.literal("=============================================="),
-                    false
-            );
-
-            showRangeBorder(source, radius);
-
-
-        } else {
-            source.sendSuccess(
-                    () -> Component.literal(count + " entities within " + (int) radius + " blocks"),
-                    false
-            );
-        }
-
-
-        return count;
+        return countEntities(source, radius, entitiesInRange);
     }
 
     private static void showRangeBorder(CommandSourceStack source, double radius) {
@@ -124,6 +118,59 @@ public class CountCommand {
                     0
             );
         }
+    }
+
+    private static int execute(CommandSourceStack source, double radius) {
+        var level = source.getLevel();
+        var center = source.getPosition();
+
+        AABB box = new AABB(
+                center.x - radius, center.y - radius, center.z - radius,
+                center.x + radius, center.y + radius, center.z + radius
+        );
+
+        List<Entity> entitiesInRange = level.getEntities(
+                (Entity) null,
+                box,
+                e -> e.distanceToSqr(center) <= radius * radius
+        );
+        return countEntities(source, radius, entitiesInRange);
+    }
+
+    private static int countEntities(CommandSourceStack source, double radius, List<Entity> entitiesInRange) {
+        int count = entitiesInRange.size();
+        Map<String, Long> entityCountMap =
+                entitiesInRange.stream()
+                        .collect(Collectors.groupingBy(
+                                e -> e.getType().toShortString(),
+                                Collectors.counting()
+                        ));
+        if (count > 1) {
+            if (source.getEntity() instanceof ServerPlayer player) {
+                player.sendSystemMessage(Component.literal("============= ENTITIES COUNT ============="));
+                entityCountMap.forEach((entityName, entityCount) -> {
+                    player.sendSystemMessage(Component.literal(entityCount + " " + entityName + "s within " + (int) radius + " blocks"));
+                });
+                player.sendSystemMessage(Component.literal("=============================================="));
+                showRangeBorder(source, radius);
+            } else {
+                source.sendSuccess(
+                        () -> Component.literal("=============ENTITIES COUNT===================="), false);
+                entityCountMap.forEach((entityName, entityCount) -> {
+                    source.sendSuccess(() -> Component.literal(entityCount + " " + entityName + "s within " + (int) radius + " blocks"), false);
+                });
+                source.sendSuccess(() -> Component.literal("=============================================="), false);
+            }
+        } else {
+            if (source.getEntity() instanceof ServerPlayer player) {
+                player.sendSystemMessage(Component.literal(count + " entities within " + (int) radius + " blocks"));
+            } else {
+                source.sendSuccess(
+                        () -> Component.literal(count + " entities within " + (int) radius + " blocks"), false);
+            }
+
+        }
+        return count;
     }
 
 }
