@@ -11,11 +11,13 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.AABB;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class CountCommand {
@@ -139,17 +141,29 @@ public class CountCommand {
 
     private static int countEntities(CommandSourceStack source, double radius, List<Entity> entitiesInRange) {
         int count = entitiesInRange.size();
-        Map<String, Long> entityCountMap =
-                entitiesInRange.stream()
-                        .collect(Collectors.groupingBy(
-                                e -> e.getType().toShortString(),
-                                Collectors.counting()
-                        ));
+        Map<String, Long> entityCountMap = new TreeMap<>();
+
+        entitiesInRange.forEach(e -> {
+            if (e instanceof ItemEntity itemEntity) {
+                // total items
+                entityCountMap.merge("items", 1L, Long::sum);
+
+                // per-item breakdown
+                String itemName = "items:" +
+                        BuiltInRegistries.ITEM
+                                .getKey(itemEntity.getItem().getItem()).getPath();
+
+                entityCountMap.merge(itemName, 1L, Long::sum);
+            } else {
+                String key = e.getType().toShortString();
+                entityCountMap.merge(key, 1L, Long::sum);
+            }
+        });
         if (count > 1) {
             if (source.getEntity() instanceof ServerPlayer player) {
                 player.sendSystemMessage(Component.literal("============= ENTITIES COUNT ============="));
                 entityCountMap.forEach((entityName, entityCount) -> {
-                    player.sendSystemMessage(Component.literal(entityCount + " " + entityName + "s within " + (int) radius + " blocks"));
+                    player.sendSystemMessage(Component.literal(entityCount + " " + entityName + " within " + (int) radius + " blocks"));
                 });
                 player.sendSystemMessage(Component.literal("=============================================="));
                 showRangeBorder(source, radius);
@@ -157,7 +171,7 @@ public class CountCommand {
                 source.sendSuccess(
                         () -> Component.literal("=============ENTITIES COUNT===================="), false);
                 entityCountMap.forEach((entityName, entityCount) -> {
-                    source.sendSuccess(() -> Component.literal(entityCount + " " + entityName + "s within " + (int) radius + " blocks"), false);
+                    source.sendSuccess(() -> Component.literal(entityCount + " " + entityName + " within " + (int) radius + " blocks"), false);
                 });
                 source.sendSuccess(() -> Component.literal("=============================================="), false);
             }
