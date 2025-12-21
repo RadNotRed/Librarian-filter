@@ -146,14 +146,13 @@ public class CountCommand {
         entitiesInRange.forEach(e -> {
             if (e instanceof ItemEntity itemEntity) {
                 // total items
-                entityCountMap.merge("items", 1L, Long::sum);
+                entityCountMap.merge("items", (long) itemEntity.getItem().getCount(), Long::sum);
 
                 // per-item breakdown
                 String itemName = "items:" +
                         BuiltInRegistries.ITEM
                                 .getKey(itemEntity.getItem().getItem()).getPath();
-
-                entityCountMap.merge(itemName, 1L, Long::sum);
+                entityCountMap.merge(itemName, (long) itemEntity.getItem().getCount(), Long::sum);
             } else {
                 String key = e.getType().toShortString();
                 entityCountMap.merge(key, 1L, Long::sum);
