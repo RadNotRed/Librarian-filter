@@ -59,6 +59,7 @@ public class VillagerTrade implements ModInitializer {
         ModPackets.register();
         PacketHandlers.register();
         registerEvent();
+        CountCommand.register();
     }
 
     private void register() {
