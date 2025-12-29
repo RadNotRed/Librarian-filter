@@ -16,9 +16,9 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.ai.gossip.GossipType;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
-import net.minecraft.world.entity.npc.Villager;
-import net.minecraft.world.entity.npc.VillagerData;
-import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.entity.npc.villager.VillagerData;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -59,11 +59,7 @@ public class VillagerTrade implements ModInitializer {
         ModPackets.register();
         PacketHandlers.register();
         registerEvent();
-        CountCommand.register();
-    }
-
-    private void register() {
-
+//        CountCommand.register();
     }
 
     private void registerEvent() {
@@ -292,7 +288,7 @@ public class VillagerTrade implements ModInitializer {
 
             // Get the simple name (e.g., "efficiency")
             String enchName = enchHolder.unwrapKey()
-                    .map(k -> k.location().getPath())
+                    .map(k -> k.identifier().getPath())
                     .orElse("unknown");
 
 //            System.out.println("Found enchantment: " + enchName + " enchBookLevel " + enchBookLevel + " price " + trade.getCostA().getCount());
