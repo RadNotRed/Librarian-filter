@@ -13,7 +13,10 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.EnchantedBookItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
@@ -28,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
+
 public class ExampleMod implements ModInitializer {
     public static final String MOD_ID = "elt";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
@@ -36,7 +40,9 @@ public class ExampleMod implements ModInitializer {
     private static final long COOLDOWN_TIME = 1000; // in milliseconds
     private static final int VILLAGER_SEARCH_RADIUS = 128; //in blocks
     private static final String enchantmentRegex = "enchantment.minecraft.";
-
+    private static final int MAX_REROLL_COUNT = 10000;
+    private static final int MAX_PROFESSION_LEVEL = 5;
+    private static final int durationTicks = 5; //in ticks
 
     @Override
     public void onInitialize() {
@@ -53,9 +59,13 @@ public class ExampleMod implements ModInitializer {
             Text[] signTexts = getSignTexts(world, blockClicked, clickedPos);
             List<EnchFilter> filters = getEnchFilters(signTexts);
             if (!filters.isEmpty()) {
-                ActionResult result = getVillagerForLectern(player, world, clickedPos, filters);
+                VillagerEntity villager = getVillagerForLectern(player, world, clickedPos, filters);
+                FilterResult result = filterTrade(player, world, villager, filters);
                 if (result != null) {
-                    return result;
+                    if (world instanceof ServerWorld) {
+                        spawnParticles((ServerWorld) world, result, villager, clickedPos);
+                    }
+                    return ActionResult.PASS;
                 }
             }
             return ActionResult.PASS; // Continue normal behavior for other blocks
@@ -75,6 +85,8 @@ public class ExampleMod implements ModInitializer {
                                 filters.add(new EnchFilter(filterText[0], enchLevel));
                             }
                         }
+                    } else {
+                        filters.add(new EnchFilter(filterText[0], 0));
                     }
                 }
             }
@@ -101,7 +113,7 @@ public class ExampleMod implements ModInitializer {
         return null;
     }
 
-    private ActionResult getVillagerForLectern(PlayerEntity player, World world, BlockPos clickedPos, List<EnchFilter> filters) {
+    private VillagerEntity getVillagerForLectern(PlayerEntity player, World world, BlockPos clickedPos, List<EnchFilter> filters) {
         List<VillagerEntity> nearbyEntities = world.getEntitiesByClass(VillagerEntity.class, player.getBoundingBox().expand(VILLAGER_SEARCH_RADIUS), (entity) -> true);
         for (VillagerEntity villager : nearbyEntities) {
             // Check if the villager is a librarian
@@ -112,7 +124,7 @@ public class ExampleMod implements ModInitializer {
                     BlockPos jobSitePos = jobSitePosOptional.get().getPos(); // Extract BlockPos from GlobalPos
                     if (jobSitePos.equals(clickedPos)) {
                         if (villager.getExperience() == 0) {
-                            return filterTrade(player, world, villager, filters);
+                            return villager;
                         }
                     }
                 }
@@ -121,7 +133,7 @@ public class ExampleMod implements ModInitializer {
         return null;
     }
 
-    private ActionResult filterTrade(PlayerEntity player, World world, VillagerEntity villager, List<EnchFilter> filters) {
+    private FilterResult filterTrade(PlayerEntity player, World world, VillagerEntity villager, List<EnchFilter> filters) {
         if (world instanceof ServerWorld) {
             UUID playerUUID = player.getUuid();
             long currentTime = System.currentTimeMillis();
@@ -130,7 +142,7 @@ public class ExampleMod implements ModInitializer {
                 long lastClickTime = cooldownMap.get(playerUUID);
                 long difference = currentTime - lastClickTime;
                 if (difference < COOLDOWN_TIME) {
-                    return ActionResult.FAIL; // Prevents further execution
+                    return FilterResult.PASS; // Prevents further execution
                 }
             }
             if (villager != null) {
@@ -153,9 +165,13 @@ public class ExampleMod implements ModInitializer {
                                 String idAsString = entry.getKey().getTranslationKey().split(enchantmentRegex)[1];
                                 int intValue = entry.getValue();
                                 for (EnchFilter filter : filters) {
-                                    if (idAsString.startsWith(filter.enchName.toLowerCase()) && intValue == filter.enchLevel) {
+                                    int valueToSearch = filter.enchLevel;
+                                    if (filter.enchLevel == 0) {
+                                        valueToSearch = entry.getKey().getMaxLevel();
+                                    }
+                                    if (StringUtils.isNotBlank(filter.enchName) && idAsString.toLowerCase().startsWith(filter.enchName.toLowerCase()) && intValue == valueToSearch) {
                                         cooldownMap.put(playerUUID, currentTime);
-                                        return ActionResult.SUCCESS;
+                                        return FilterResult.SUCCESS;
                                     }
                                 }
 
@@ -165,9 +181,87 @@ public class ExampleMod implements ModInitializer {
                 }
             }
         }
-        return ActionResult.PASS;
+        return FilterResult.FAILED;
     }
 
     public record EnchFilter(String enchName, int enchLevel) {
+    }
+
+    enum FilterResult {
+        PASS,
+        SUCCESS,
+        FAILED
+    }
+
+
+    private void spawnParticles(ServerWorld world, FilterResult filterResult, VillagerEntity villager, BlockPos clickedPos) {
+        if (filterResult == FilterResult.SUCCESS) {
+            world.playSound(villager, villager.getBlockPos(),
+                    SoundEvents.ENTITY_VILLAGER_YES,
+                    SoundCategory.NEUTRAL, 1f, 1f);
+            for (int i = 0; i < durationTicks; i++) {
+                world.spawnParticles(ParticleTypes.HAPPY_VILLAGER,
+                        villager.getX() + 0.5,
+                        villager.getY() + 1,
+                        villager.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01);
+                world.spawnParticles(ParticleTypes.HAPPY_VILLAGER,
+                        clickedPos.getX() + 0.5,
+                        clickedPos.getY() + 1,
+                        clickedPos.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01);
+//                world.sendParticles(
+//                        ParticleTypes.HAPPY_VILLAGER,
+//                        villager.getX() + 0.5,
+//                        villager.getY() + 1,
+//                        villager.getZ() + 0.5,
+//                        8, 0.3, 0.3, 0.3, 0.01
+//                );
+//                world.sendParticles(
+//                        ParticleTypes.HAPPY_VILLAGER,
+//                        clickedPos.getX() + 0.5,
+//                        clickedPos.getY() + 1,
+//                        clickedPos.getZ() + 0.5,
+//                        8, 0.3, 0.3, 0.3, 0.01
+//                );
+            }
+        }
+        if (filterResult == FilterResult.FAILED) {
+            world.playSound(villager, villager.getBlockPos(),
+                    SoundEvents.ENTITY_VILLAGER_NO,
+                    SoundCategory.NEUTRAL, 1f, 1f);
+
+//            world.playSound(null, villager,
+//                    SoundEvents.VILLAGER_NO,
+//                    SoundSource.NEUTRAL, 1f, 1f);
+            for (int i = 0; i < durationTicks; i++) {
+                world.spawnParticles(ParticleTypes.ANGRY_VILLAGER,
+                        villager.getX() + 0.5,
+                        villager.getY() + 1,
+                        villager.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01);
+                world.spawnParticles(ParticleTypes.ANGRY_VILLAGER,
+                        clickedPos.getX() + 0.5,
+                        clickedPos.getY() + 1,
+                        clickedPos.getZ() + 0.5,
+                        8, 0.3, 0.3, 0.3, 0.01);
+
+//                world.sendParticles(
+//                        ParticleTypes.ANGRY_VILLAGER,
+//                        villager.getX() + 0.5,
+//                        villager.getY() + 1,
+//                        villager.getZ() + 0.5,
+//                        8, 0.3, 0.3, 0.3, 0.01
+//                );
+//                world.sendParticles(
+//                        ParticleTypes.ANGRY_VILLAGER,
+//                        clickedPos.getX() + 0.5,
+//                        clickedPos.getY() + 1,
+//                        clickedPos.getZ() + 0.5,
+//                        8, 0.3, 0.3, 0.3, 0.01
+//                );
+            }
+
+        }
     }
 }
