@@ -1,23 +1,17 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom'
 	id 'maven-publish'
 }
 
-version = project.mod_version
-group = project.maven_group
-
 base {
-	archivesName = "Easy Villager Trade Reroll - Fabric - ${project.minecraft_version}"
-}
-
-repositories {
+	archivesName = "librarian-filter-fabric-${project.minecraft_version}"
 }
 
 loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"quick-craft" {
+		"librarian-filter" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -34,15 +28,6 @@ dependencies {
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
-processResources {
-	def version = project.version
-	inputs.property "version", version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": version
-	}
-}
-
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 25
 }
@@ -57,15 +42,11 @@ java {
 	}
 }
 
-jar {
-	def projectName = project.name
-	inputs.property "projectName", projectName
+processResources {
+	def version = project.version
+	inputs.property "version", version
 
-	from("LICENSE") {
-		rename { "${it}_$projectName"}
+	filesMatching("fabric.mod.json") {
+		expand "version": version
 	}
-}
-
-tasks.withType(Jar).configureEach {
-	archiveFileName = archiveFileName.get().replace("--", "- ")
 }

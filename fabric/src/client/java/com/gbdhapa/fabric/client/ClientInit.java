@@ -1,10 +1,10 @@
-package com.gbdhapa.client;
+package com.gbdhapa.fabric.client;
 
+import com.gbdhapa.network.ConfigRequestPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import com.gbdhapa.network.ConfigRequestPayload;
 import net.minecraft.client.KeyMapping;
 
 public class ClientInit {
@@ -19,7 +19,7 @@ public class ClientInit {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || client.level == null)
-                return; // only in-game
+                return;
 
             while (OPEN_CONFIG_KEY.consumeClick()) {
                 ClientPlayNetworking.send(new ConfigRequestPayload());

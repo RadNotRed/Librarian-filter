@@ -1,17 +1,14 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom'
 	id 'maven-publish'
 }
 
-version = project.mod_version
-group = project.maven_group
-
 base {
-	archivesName = "quick-craft-common"
+	archivesName = "librarian-filter-common"
 }
 
 loom {
-    // This is a common module, we don't want to run it directly
+    // Common module
 }
 
 dependencies {

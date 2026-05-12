@@ -18,9 +18,9 @@ pluginManagement {
 }
 
 // Should match your modid
-rootProject.name = 'quick-craft'
+rootProject.name = 'librarian-filter'
 
 include 'common'
 include 'fabric'
-include 'neoforge'
-include 'quilt'
+// include 'neoforge'
+// include 'quilt'

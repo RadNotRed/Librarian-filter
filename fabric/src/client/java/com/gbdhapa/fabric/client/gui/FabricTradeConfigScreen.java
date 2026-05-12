@@ -1,4 +1,4 @@
-package com.gbdhapa.client.gui;
+package com.gbdhapa.fabric.client.gui;
 
 import com.gbdhapa.network.TradeConfigUpdatePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -7,11 +7,11 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public class TradeConfigScreen extends Screen {
+public class FabricTradeConfigScreen extends Screen {
     private boolean enableReroll;
     private boolean enableEachLevelReroll;
 
-    public TradeConfigScreen(boolean enableReroll, boolean enableEachLevelReroll) {
+    public FabricTradeConfigScreen(boolean enableReroll, boolean enableEachLevelReroll) {
         super(Component.literal("Trade Reroll Configuration"));
         this.enableReroll = enableReroll;
         this.enableEachLevelReroll = enableEachLevelReroll;

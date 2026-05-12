@@ -2,33 +2,16 @@ plugins {
     id 'net.neoforged.moddev'
 }
 
-version = project.mod_version
-group = project.maven_group
-
 base {
-    archivesName = "Easy Villager Trade Reroll - NeoForge - ${project.minecraft_version}"
+    archivesName = "librarian-filter-neoforge-${project.minecraft_version}"
 }
 
 neoForge {
     version = project.neoforge_version
 
-    parchment {
-        mappingsVersion = '2024.07.28'
-        minecraftVersion = '1.21'
-    }
-
-    runs {
-        client {
-            client()
-            systemProperty 'neoforge.logging.markers', 'REGISTRIES'
-            systemProperty 'neoforge.logging.console.level', 'debug'
-        }
-    }
-
     mods {
-        "quick_craft" {
+        "librarian_filter" {
             sourceSet sourceSets.main
-            sourceSet project(":common").sourceSets.main
         }
     }
 }
@@ -43,8 +26,4 @@ processResources {
     filesMatching("META-INF/neoforge.mods.toml") {
         expand "version": project.version
     }
-}
-
-jar {
-    from project(":common").sourceSets.main.output
 }
