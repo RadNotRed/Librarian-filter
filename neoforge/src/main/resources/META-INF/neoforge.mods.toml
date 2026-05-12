@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="CC0-1.0"
+issueTrackerURL="https://github.com/gulab9762/quick-craft/issues"
+
+[[mods]]
+modId="quick_craft"
+version="${version}"
+displayName="Quick Craft"
+displayURL="https://modrinth.com/mod/quickcraft"
+logoFile="icon.png"
+authors="IGxxD!"
+description='''
+Mod to get desired enchantment book trade from librarian villager
+'''
+
+[[dependencies.quick_craft]]
+    modId="neoforge"
+    mandatory=true
+    versionRange="[26.1,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.quick_craft]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[26.1,)"
+    ordering="NONE"
+    side="BOTH"
