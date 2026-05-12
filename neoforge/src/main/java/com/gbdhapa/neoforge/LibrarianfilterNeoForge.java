@@ -1,0 +1,97 @@
+package com.gbdhapa.neoforge;
+
+import com.gbdhapa.RerollLogic;
+import com.gbdhapa.config.TradeConfig;
+import com.gbdhapa.network.*;
+import com.gbdhapa.neoforge.client.LibrarianfilterNeoForgeClient;
+import net.minecraft.commands.Commands;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.NameAndId;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+
+@Mod("librarian_filter")
+public class LibrarianfilterNeoForge {
+    public LibrarianfilterNeoForge(IEventBus modEventBus) {
+        TradeConfig.load();
+
+        modEventBus.addListener(this::registerPayloads);
+        
+        NeoForge.EVENT_BUS.addListener(this::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(this::registerCommands);
+
+        LibrarianfilterNeoForgeClient.init(modEventBus);
+    }
+
+    private void registerPayloads(RegisterPayloadHandlersEvent event) {
+        final PayloadRegistrar registrar = event.registrar("1.0.1");
+
+        registrar.playToClient(TradeConfigSyncPayload.ID, TradeConfigSyncPayload.CODEC, (payload, context) -> {
+            TradeConfig.INSTANCE.enableReroll = payload.enableReroll();
+            TradeConfig.INSTANCE.enableEachLevelReroll = payload.enableEachLevelReroll();
+        });
+
+        registrar.playToServer(TradeConfigUpdatePayload.ID, TradeConfigUpdatePayload.CODEC, (payload, context) -> {
+            context.enqueueWork(() -> {
+                ServerPlayer player = (ServerPlayer) context.player();
+                if (player.level().getServer().getPlayerList().isOp(new NameAndId(player.getGameProfile()))) {
+                    TradeConfig.INSTANCE.enableReroll = payload.enableReroll();
+                    TradeConfig.INSTANCE.enableEachLevelReroll = payload.enableEachLevelReroll();
+                    TradeConfig.save();
+
+                    PacketDistributor.sendToAllPlayers(new TradeConfigSyncPayload(payload.enableReroll(), payload.enableEachLevelReroll()));
+                }
+            });
+        });
+
+        registrar.playToServer(ConfigRequestPayload.ID, ConfigRequestPayload.CODEC, (payload, context) -> {
+            context.enqueueWork(() -> {
+                ServerPlayer player = (ServerPlayer) context.player();
+                if (player.level().getServer().getPlayerList().isOp(new NameAndId(player.getGameProfile()))) {
+                    PacketDistributor.sendToPlayer(player, new OpenConfigScreenPayload(
+                            TradeConfig.INSTANCE.enableReroll,
+                            TradeConfig.INSTANCE.enableEachLevelReroll
+                    ));
+                }
+            });
+        });
+    }
+
+    private void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        event.setCancellationResult(RerollLogic.handleBlockUse(event.getEntity(), event.getLevel(), event.getPos()));
+        if (event.getCancellationResult().consumesAction()) {
+            event.setCanceled(true);
+        }
+    }
+
+    private void registerCommands(RegisterCommandsEvent event) {
+        event.getDispatcher().register(Commands.literal("reroll")
+                .requires(source -> {
+                    try {
+                        return source.getServer().getPlayerList().isOp(new NameAndId(source.getPlayerOrException().getGameProfile()));
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
+                .then(Commands.literal("config")
+                        .executes(context -> {
+                            ServerPlayer player = context.getSource().getPlayerOrException();
+                            PacketDistributor.sendToPlayer(player, new OpenConfigScreenPayload(
+                                    TradeConfig.INSTANCE.enableReroll,
+                                    TradeConfig.INSTANCE.enableEachLevelReroll
+                            ));
+                            return 1;
+                        })
+                )
+        );
+    }
+}
