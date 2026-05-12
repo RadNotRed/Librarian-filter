@@ -1,29 +1,26 @@
 modLoader="javafml"
 loaderVersion="[1,)"
-license="CC0-1.0"
-issueTrackerURL="https://github.com/gulab9762/quick-craft/issues"
+license="All Rights Reserved"
 
 [[mods]]
-modId="quick_craft"
+modId="librarian_filter"
 version="${version}"
-displayName="Quick Craft"
-displayURL="https://modrinth.com/mod/quickcraft"
-logoFile="icon.png"
-authors="IGxxD!"
+displayName="Easy Villager Trade Reroll"
+authors="gbdhapa"
 description='''
-Mod to get desired enchantment book trade from librarian villager
+A mod that allows you to reroll villager trades easily using signs.
 '''
 
-[[dependencies.quick_craft]]
+[[dependencies.librarian_filter]]
     modId="neoforge"
-    mandatory=true
-    versionRange="[26.1,)"
+    type="required"
+    versionRange="[21.1,)"
     ordering="NONE"
     side="BOTH"
 
-[[dependencies.quick_craft]]
+[[dependencies.librarian_filter]]
     modId="minecraft"
-    mandatory=true
-    versionRange="[26.1,)"
+    type="required"
+    versionRange="[1.21.1,)"
     ordering="NONE"
     side="BOTH"

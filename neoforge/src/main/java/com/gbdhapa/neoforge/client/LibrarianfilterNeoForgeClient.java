@@ -1,0 +1,53 @@
+package com.gbdhapa.neoforge.client;
+
+import com.gbdhapa.network.ConfigRequestPayload;
+import com.gbdhapa.network.OpenConfigScreenPayload;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.resources.Identifier;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.KeyMapping.Category;
+import net.minecraft.client.Minecraft;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+
+public class LibrarianfilterNeoForgeClient {
+    public static KeyMapping OPEN_CONFIG_KEY;
+
+    public static void init(IEventBus modEventBus) {
+        modEventBus.addListener(LibrarianfilterNeoForgeClient::registerKeyMappings);
+        modEventBus.addListener(LibrarianfilterNeoForgeClient::registerClientPayloads);
+        NeoForge.EVENT_BUS.addListener(LibrarianfilterNeoForgeClient::onPlayerTick);
+    }
+
+    public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        OPEN_CONFIG_KEY = new KeyMapping(
+                "key.librarian-filter.open_trade_config",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_O,
+                new Category(Identifier.fromNamespaceAndPath("minecraft", "gameplay"))
+        );
+        event.register(OPEN_CONFIG_KEY);
+    }
+
+    public static void registerClientPayloads(RegisterPayloadHandlersEvent event) {
+        event.registrar("1.0.1").playToClient(OpenConfigScreenPayload.ID, OpenConfigScreenPayload.CODEC, (payload, context) -> {
+            context.enqueueWork(() -> {
+                Minecraft.getInstance().setScreen(new NeoForgeTradeConfigScreen(payload.enableReroll(), payload.enableEachLevelReroll()));
+            });
+        });
+    }
+
+    private static void onPlayerTick(PlayerTickEvent.Post event) {
+        if (event.getEntity().level().isClientSide()) {
+            if (OPEN_CONFIG_KEY != null) {
+                while (OPEN_CONFIG_KEY.consumeClick()) {
+                    ClientPacketDistributor.sendToServer(new ConfigRequestPayload());
+                }
+            }
+        }
+    }
+}
