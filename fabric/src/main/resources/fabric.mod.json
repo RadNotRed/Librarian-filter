@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "quick-craft",
+	"version": "${version}",
+	"name": "Quick Craft",
+	"description": "Mod to get desired enchantment book trade from librarian villager",
+	"authors": [
+		"IGxxD!"
+	],
+	"contact": {
+		"homepage": "https://modrinth.com/mod/quickcraft",
+		"sources": "https://github.com/gulab9762/quick-craft",
+		"wiki": "https://github.com/gulab9762/quick-craft/wiki",
+		"issues": "https://github.com/gulab9762/quick-craft/issues",
+		"discord": "https://discord.com/invite/bWWwkFryuA"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/quick-craft/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.gbdhapa.fabric.QuickCraftFabric"
+		],
+		"client": [
+			"com.gbdhapa.client.QuickCraftClient"
+		]
+	},
+	"mixins": [
+		"quick-craft.mixins.json",
+		{
+			"config": "quick-craft.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

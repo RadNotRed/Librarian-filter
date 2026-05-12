@@ -1,0 +1,51 @@
+{
+	"schema_version": 1,
+	"quilt_loader": {
+		"group": "com.gbdhapa",
+		"id": "quick-craft",
+		"version": "${version}",
+		"metadata": {
+			"name": "Quick Craft",
+			"description": "Mod to get desired enchantment book trade from librarian villager",
+			"contributors": {
+				"IGxxD!": "Owner"
+			},
+			"contact": {
+				"homepage": "https://modrinth.com/mod/quickcraft",
+				"sources": "https://github.com/gulab9762/quick-craft",
+				"issues": "https://github.com/gulab9762/quick-craft/issues"
+			},
+			"license": "CC0-1.0",
+			"icon": "assets/quick-craft/icon.png"
+		},
+		"intermediate_mappings": "net.fabricmc:intermediary",
+		"entrypoints": {
+			"init": [
+				{
+					"adapter": "default",
+					"value": "com.gbdhapa.quilt.QuickCraftQuilt"
+				}
+			],
+			"client_init": [
+				{
+					"adapter": "default",
+					"value": "com.gbdhapa.quilt.client.QuickCraftQuiltClient"
+				}
+			]
+		},
+		"depends": [
+			{
+				"id": "quilt_loader",
+				"versions": ">=0.26.1"
+			},
+			{
+				"id": "minecraft",
+				"versions": "~26.1"
+			},
+			{
+				"id": "java",
+				"versions": ">=25"
+			}
+		]
+	}
+}

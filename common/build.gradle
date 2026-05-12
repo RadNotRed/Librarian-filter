@@ -1,0 +1,33 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = "quick-craft-common"
+}
+
+loom {
+    // This is a common module, we don't want to run it directly
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+	
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
