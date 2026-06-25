@@ -77,17 +77,21 @@ public class ExampleMod implements ModInitializer {
         if (signTexts != null) {
             for (Text line : signTexts) {
                 if (line.getString() != null) {
-                    String[] filterText = line.getString().trim().split(" ");
+                    String[] filterText = line.getString().trim().split("\\s+");
                     if (filterText.length > 1) {
-                        if (StringUtils.isNumeric(filterText[1])) {
-                            int enchLevel = Integer.parseInt(filterText[1]);
-                            int maxPrice = 0;
-                            if (filterText.length > 2 && StringUtils.isNumeric(filterText[2])) {
-                                maxPrice = Integer.parseInt(filterText[2]);
+                        try {
+                            if (StringUtils.isNumeric(filterText[1])) {
+                                int enchLevel = Integer.parseInt(filterText[1]);
+                                int maxPrice = 0;
+                                if (filterText.length > 2 && StringUtils.isNumeric(filterText[2])) {
+                                    maxPrice = Integer.parseInt(filterText[2]);
+                                }
+                                if (enchLevel > 0) {
+                                    filters.add(new EnchFilter(filterText[0], enchLevel, maxPrice));
+                                }
                             }
-                            if (enchLevel > 0) {
-                                filters.add(new EnchFilter(filterText[0], enchLevel, maxPrice));
-                            }
+                        } catch (NumberFormatException e) {
+                            // Ignore invalid or overflowing numbers
                         }
                     } else if (filterText.length == 1 && !filterText[0].isEmpty()) {
                         filters.add(new EnchFilter(filterText[0], 0, 0));
